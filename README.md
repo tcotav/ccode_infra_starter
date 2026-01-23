@@ -131,6 +131,12 @@ Hooks provide **technical enforcement** rather than relying on Claude's behavior
 │   └── DEPLOYMENT.md          # Multi-repo rollout
 └── QUICKSTART.md              # 5-minute getting started
 
+.devcontainer/
+├── devcontainer.json          # VSCode devcontainer config
+├── Dockerfile                 # Container with all SRE tools
+├── init-firewall.sh           # Network configuration script
+└── README.md                  # Complete devcontainer documentation
+
 .gitignore                     # Excludes audit logs
 CLAUDE.md                      # Project context for Claude Code
 README.md                      # This file
@@ -165,6 +171,73 @@ See [Deployment Guide - Customization](.claude/docs/DEPLOYMENT.md#customization-
 - **Claude Code** - [Download here](https://claude.ai/download)
 - **Terraform** - Any version (hooks are terraform-agnostic)
 - **GCP authentication** - `gcloud auth login` (for terraform to work)
+
+## Development Environment
+
+### Devcontainer (Recommended)
+
+This repository includes a complete devcontainer configuration that provides all required tools and dependencies. Using the devcontainer is recommended for several reasons:
+
+**Consistency**
+- Everyone on your team uses identical tool versions
+- Eliminates "works on my machine" issues
+- No need to manually install terraform, gcloud, kubectl, etc.
+
+**Completeness**
+- All SRE tools pre-installed: terraform, tflint, terraform-docs, gcloud, kubectl
+- Quality tools included: shellcheck, pre-commit, gitleaks, bat, ripgrep, yq
+- VSCode extensions automatically configured for terraform and Python
+- Auto-formatting enabled for terraform, Python, and shell scripts
+
+**Security**
+- gitleaks scanner prevents accidentally committing secrets
+- Isolated environment with network controls
+- Pre-commit framework for additional safeguards
+
+**Hook Development**
+- Python 3 and all dependencies ready to use
+- Test scripts can run immediately without setup
+- shellcheck validates bash scripts as you write them
+
+### Using the Devcontainer
+
+**Prerequisites:**
+- Docker Desktop installed and running
+- VSCode with "Dev Containers" extension
+
+**Start the container:**
+
+1. Open this repository in VSCode
+2. Click the blue "Reopen in Container" prompt, or
+3. Command palette: "Dev Containers: Reopen in Container"
+
+**First build:**
+- The container build takes a few minutes on first run
+- Subsequent starts are fast (container is cached)
+- All tools are ready immediately after build completes
+
+**Tool versions:**
+- Terraform 1.14.3
+- tflint 0.55.1, terraform-docs 0.19.0
+- gcloud CLI (latest), kubectl (stable)
+- Python 3, pre-commit, gitleaks, yq, bat, ripgrep
+
+See [.devcontainer/README.md](.devcontainer/README.md) for complete details, customization options, and troubleshooting.
+
+### Local Installation (Alternative)
+
+If you prefer not to use the devcontainer, install these tools locally:
+
+```bash
+# macOS
+brew install python3 terraform tflint terraform-docs gcloud kubectl
+
+# Ubuntu/Debian
+apt-get install python3 python3-pip
+# Then install terraform and cloud tools per vendor docs
+```
+
+Ensure Python 3 is available for the hook scripts.
 
 ## FAQ
 
