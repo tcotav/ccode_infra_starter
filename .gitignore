@@ -1,0 +1,5 @@
+# Claude Code audit logs (contain user-specific command history)
+.claude/audit/
+
+# Claude Code local settings (user-specific overrides)
+.claude/settings.local.json
