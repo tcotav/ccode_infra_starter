@@ -40,9 +40,12 @@ This philosophy should inform all documentation, examples, and design decisions.
 │   └── DEPLOYMENT.md          # Multi-repo rollout guide
 └── QUICKSTART.md              # 5-minute getting started
 
-.gitignore                     # Excludes audit logs
-CLAUDE.md                      # This file (project context)
+.gitignore                     # Excludes audit logs, CLAUDE.local.md
+CLAUDE.md                      # This file (project context, committed)
+CLAUDE.local.md                # Personal preferences (gitignored, optional)
 ```
+
+**Note:** In monorepos, you can have nested CLAUDE.md files in subdirectories for component-specific context. See DEPLOYMENT.md for detailed patterns.
 
 ## Design Decisions & Constraints
 
@@ -198,4 +201,18 @@ This `CLAUDE.md` file itself serves as an example of how to document projects fo
 - Special constraints or approval requirements
 - Team-specific conventions
 
-**Tip for SRE teams:** Copy this file structure but customize the content for your actual infrastructure repos.
+### Using CLAUDE.md Files in Your Infrastructure
+
+**Nested CLAUDE.md files for monorepos:**
+- Root CLAUDE.md provides organization-wide context
+- Subdirectory CLAUDE.md files add specific context for each area
+- Claude Code reads all relevant files as it navigates your codebase
+- See DEPLOYMENT.md section "Repository Structures and Context Files" for patterns
+
+**CLAUDE.local.md for personal preferences:**
+- Create CLAUDE.local.md (gitignored) for your working style preferences
+- Use it for personal notes, shortcuts, environment-specific context
+- Never commit CLAUDE.local.md - it's for you alone
+- Allows team standards in CLAUDE.md while preserving personal workflow
+
+**Tip for SRE teams:** Copy this file structure but customize the content for your actual infrastructure repos. For monorepos, add subdirectory CLAUDE.md files for each major component or tenant.

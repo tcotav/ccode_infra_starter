@@ -3,3 +3,7 @@
 
 # Claude Code local settings (user-specific overrides)
 .claude/settings.local.json
+
+# Claude Code personal context files (user preferences, never commit)
+CLAUDE.local.md
+**/CLAUDE.local.md

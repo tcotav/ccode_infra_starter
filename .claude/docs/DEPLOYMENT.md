@@ -293,6 +293,368 @@ echo "3. Commit and PR"
 
 ---
 
+## Repository Structures and Context Files
+
+### Overview: CLAUDE.md and CLAUDE.local.md
+
+Claude Code reads context files to understand your repository:
+
+- **CLAUDE.md** - Project context (COMMITTED to git)
+  - Repository purpose and structure
+  - Team conventions and constraints
+  - Infrastructure context
+  - What commands are safe vs dangerous in this repo
+
+- **CLAUDE.local.md** - Personal preferences (GITIGNORED)
+  - Your working style preferences
+  - Personal shortcuts or reminders
+  - Environment-specific notes
+  - Never committed to git
+
+Both files are read by Claude Code and provide context for AI assistance.
+
+### Nested CLAUDE.md Files for Monorepos
+
+Claude Code supports nested context files - each subdirectory can have its own CLAUDE.md that adds specific context for that area of the codebase.
+
+**How it works:**
+- Root CLAUDE.md provides organization-wide context
+- Subdirectory CLAUDE.md files add specific context for that area
+- Context accumulates as you navigate deeper
+- All CLAUDE.md files should be committed to git
+
+### Repository Structure Patterns
+
+#### Pattern 1: Large Monorepo with Multiple Apps
+
+**Example structure:**
+```
+infrastructure/
+├── CLAUDE.md                    # Root: General infrastructure context
+├── .claude/                     # Hooks apply to entire repo
+│   ├── settings.json
+│   └── hooks/
+│       └── terraform-validator.py
+├── bootstrap/
+│   ├── CLAUDE.md               # Specific: Tenant creation process
+│   └── terraform/
+│       └── main.tf
+├── billing-etl/
+│   ├── CLAUDE.md               # Specific: Multi-cloud billing context
+│   └── src/
+│       └── etl.py
+├── tenant-configs/
+│   ├── CLAUDE.md               # Specific: Config file conventions
+│   └── tenants/
+│       ├── app1.yaml
+│       └── app2.yaml
+└── .gitignore                  # Excludes CLAUDE.local.md files
+
+```
+
+**Root CLAUDE.md example:**
+```markdown
+# Infrastructure Monorepo
+
+This repository manages our entire infrastructure lifecycle.
+
+## Structure
+
+- `bootstrap/` - Tenant provisioning automation
+- `billing-etl/` - Multi-cloud cost aggregation
+- `tenant-configs/` - Application environment definitions
+
+## Important Constraints
+
+- NEVER run terraform apply - all applies go through GitOps/ArgoCD
+- Each folder is independent - changes in one don't affect others
+- Tenant is our term for an application + its environments (dev, staging, prod)
+
+## Approval Process
+
+- Bootstrap changes: Requires platform team review
+- Billing changes: Requires finops team review
+- Config changes: Requires app team review + platform team review
+```
+
+**Subdirectory CLAUDE.md example** (bootstrap/CLAUDE.md):
+```markdown
+# Bootstrap - Tenant Provisioning
+
+Creates new tenants (application + environments).
+
+## What This Does
+
+Provisions for each new application:
+- GCP projects (dev, staging, prod)
+- Kubernetes namespaces across clusters
+- IAM bindings and service accounts
+- Monitoring and logging infrastructure
+
+## Running This
+
+Standard process:
+1. Update tenant definition in `tenant-configs/`
+2. Run `terraform plan` here to preview
+3. PR must be approved by platform-team
+4. Merge triggers ArgoCD to apply
+
+## Common Issues
+
+- Quota exhaustion: Check GCP quotas in console first
+- IAM propagation: Can take 2-3 minutes for bindings to work
+- Naming conflicts: Tenant names must be globally unique
+
+## Files to Know
+
+- `main.tf` - Core tenant resources
+- `modules/` - Reusable components
+- `variables.tf` - Input parameters
+```
+
+#### Pattern 2: Multiple Repos by Functional Area
+
+**Example structure:**
+```
+# Repository: sandbox-infrastructure
+sandbox-infrastructure/
+├── CLAUDE.md                    # Context: Sandbox environment
+├── .claude/                     # Hooks for this repo
+│   └── settings.json
+├── tenant-app1/
+│   ├── CLAUDE.md               # Specific: This tenant's resources
+│   └── terraform/
+│       └── main.tf
+└── tenant-app2/
+    ├── CLAUDE.md
+    └── terraform/
+
+# Repository: webservices-infrastructure
+webservices-infrastructure/
+├── CLAUDE.md                    # Context: Production web tier
+├── .claude/                     # Same hooks, different repo
+│   └── settings.json
+├── tenant-api-gateway/
+│   ├── CLAUDE.md
+│   └── terraform/
+└── tenant-user-service/
+    ├── CLAUDE.md
+    └── terraform/
+
+# Repository: dataservices-infrastructure
+dataservices-infrastructure/
+├── CLAUDE.md                    # Context: Data platform
+├── .claude/                     # Same hooks, different repo
+│   └── settings.json
+├── tenant-analytics/
+│   ├── CLAUDE.md
+│   └── terraform/
+└── tenant-ml-pipeline/
+    ├── CLAUDE.md
+    └── terraform/
+```
+
+**Functional area CLAUDE.md example** (webservices-infrastructure/CLAUDE.md):
+```markdown
+# Web Services Infrastructure
+
+Production infrastructure for customer-facing web services.
+
+## Environment
+
+- GCP projects: webservices-prod, webservices-staging
+- Kubernetes clusters: us-central1-prod, us-east1-prod (HA)
+- Load balancers: Global HTTPS LB with Cloud Armor
+
+## Critical Constraints
+
+- ALL changes require production change ticket
+- Deployments only during change windows (Tue/Thu 10am-2pm PT)
+- Always run terraform plan and paste output in PR
+- Changes affect production traffic - extra caution required
+
+## This Repo Contains
+
+Each subdirectory is a tenant (application):
+- Compute resources (GKE workloads)
+- Networking (VPC, subnets, firewall rules)
+- Storage (CloudSQL, GCS buckets)
+- Monitoring (alerting, dashboards)
+
+## Tenant Naming Convention
+
+Format: `tenant-{service-name}/`
+Examples: tenant-api-gateway, tenant-user-service
+
+## Questions?
+
+- Infrastructure: #webservices-sre
+- Tenant ownership: See OWNERS file in each tenant directory
+```
+
+**Tenant-specific CLAUDE.md example** (tenant-api-gateway/CLAUDE.md):
+```markdown
+# API Gateway Tenant
+
+Central API gateway for all web services traffic.
+
+## What This Manages
+
+- GKE deployment (20 replicas across 2 zones)
+- CloudSQL database (Postgres 14, HA configuration)
+- Redis cache cluster
+- Cloud Armor security policies
+- API keys in Secret Manager
+
+## Dependencies
+
+- Requires: CloudSQL private IP (managed in shared-resources/)
+- Used by: All tenant-* services in this repo
+
+## Scaling Limits
+
+- Min replicas: 10 (always keep headroom)
+- Max replicas: 50 (quota limit)
+- CloudSQL: Currently at 50% capacity
+
+## Deployment Notes
+
+- Zero-downtime deployments via rolling update
+- CloudSQL changes require maintenance window
+- Cache flush after schema changes
+
+## Owners
+
+- Primary: api-team (#api-gateway)
+- Secondary: webservices-sre (#webservices-sre)
+```
+
+### Using CLAUDE.local.md for Personal Preferences
+
+**CLAUDE.local.md** is for YOUR preferences - never committed to git.
+
+**Add to .gitignore:**
+```
+# Claude Code personal preferences
+CLAUDE.local.md
+**/CLAUDE.local.md
+```
+
+**Example CLAUDE.local.md** (root or any subdirectory):
+```markdown
+# My Personal Preferences
+
+## Working Style
+
+- I prefer explicit over implicit - always show me the full command
+- When multiple approaches exist, list pros/cons before choosing
+- I like to see terraform plan output before approving
+
+## My Environment
+
+- I work primarily in sandbox and dev environments
+- My GCP project: dev-jfrancis-sandbox
+- My kubectl context: gke_dev-jfrancis-sandbox_us-central1_dev-cluster
+
+## Shortcuts I Use
+
+- Always run terraform fmt before committing
+- Run tflint on changes
+- Check for security issues with tfsec
+
+## Reminders for Me
+
+- Bootstrap changes need platform-team approval
+- Remember to update OWNERS file when adding new tenants
+- Cost estimation: Run infracost before large changes
+
+## My Common Commands
+
+Instead of asking me to approve each time, here's what I typically run:
+- terraform init && terraform fmt && terraform validate
+- terraform plan -out=plan.tfplan
+- (I'll manually run apply after PR approval)
+```
+
+### Deployment Guidance by Repository Type
+
+#### For Large Monorepo
+
+1. **Deploy hooks at root:**
+   ```bash
+   # Copy .claude/ directory to root
+   cp -r /path/to/template/.claude .
+   ```
+
+2. **Create root CLAUDE.md with organization context**
+
+3. **Add subdirectory CLAUDE.md files for each major area:**
+   - bootstrap/CLAUDE.md
+   - billing-etl/CLAUDE.md
+   - tenant-configs/CLAUDE.md
+   - (One-time effort, but very valuable)
+
+4. **Update .gitignore:**
+   ```
+   # Claude Code
+   .claude/audit/
+   .claude/settings.local.json
+   CLAUDE.local.md
+   **/CLAUDE.local.md
+   ```
+
+5. **Commit everything:**
+   ```bash
+   git add .claude/ .gitignore CLAUDE.md */CLAUDE.md
+   git commit -m "Add Claude Code hooks and context files"
+   ```
+
+#### For Functional Area Repos
+
+1. **Deploy hooks to each repo:**
+   ```bash
+   # Same .claude/ directory in each repo
+   for repo in sandbox webservices dataservices; do
+     cd ~/repos/${repo}-infrastructure
+     cp -r /path/to/template/.claude .
+     # Customize per repo...
+   done
+   ```
+
+2. **Create environment-specific root CLAUDE.md:**
+   - sandbox-infrastructure/CLAUDE.md - Note it's dev environment
+   - webservices-infrastructure/CLAUDE.md - Note it's production, extra caution
+   - dataservices-infrastructure/CLAUDE.md - Note data sensitivity
+
+3. **Add tenant-specific CLAUDE.md files:**
+   - Optional but recommended for complex tenants
+   - Essential for tenants with special constraints
+
+4. **Each repo can have different hook customization:**
+   - Sandbox: Maybe more permissive
+   - Production: Stricter rules
+
+### Best Practices for Context Files
+
+**DO:**
+- Keep CLAUDE.md focused on facts, not preferences
+- Update CLAUDE.md when conventions change
+- Include examples of good patterns in your repo
+- Link to relevant documentation (wiki, runbooks)
+- Document what makes this repo special or dangerous
+
+**DON'T:**
+- Put secrets or credentials in CLAUDE.md (it's committed!)
+- Make CLAUDE.md too long (aim for 50-200 lines)
+- Duplicate information that's already in README.md
+- Put personal preferences in CLAUDE.md (use CLAUDE.local.md)
+
+**CLAUDE.md is for Claude, README.md is for humans:**
+- README: What this repo does, how to get started, where to get help
+- CLAUDE.md: Constraints, conventions, structure, dangerous operations
+
+---
+
 ## Customization Per Repository
 
 Different repos may need different rules:
