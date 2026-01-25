@@ -127,6 +127,105 @@ Example log entry:
 
 ---
 
+## Setting Up Your CLAUDE.md
+
+Claude Code reads `CLAUDE.md` files to understand your repository. Creating one for your infrastructure repo gives Claude essential context about your environment, constraints, and conventions.
+
+### Why This Matters
+
+Without context, Claude treats your repo as generic terraform. With a good `CLAUDE.md`, Claude understands:
+- Which GCP projects you manage
+- What environments exist (dev/staging/prod)
+- Team-specific naming conventions
+- What actions require extra caution
+
+### Create Your CLAUDE.md
+
+Add a `CLAUDE.md` file at the root of your repo:
+
+```markdown
+# Infrastructure Context
+
+## What This Repo Manages
+
+Brief description of what infrastructure this repo controls.
+
+- GCP projects: project-dev, project-staging, project-prod
+- Kubernetes clusters: [list clusters]
+- Key services: [what runs here]
+
+## Environments
+
+- **dev** - Development environment, safe to experiment
+- **staging** - Pre-production, mirrors prod configuration
+- **prod** - Production, all changes require extra review
+
+## Important Constraints
+
+- All terraform applies go through PR workflow (never run apply directly)
+- Production changes require approval from @platform-team
+- [Add your team-specific rules]
+
+## File Structure
+
+Describe your repo layout so Claude can navigate effectively:
+
+- `modules/` - Reusable terraform modules
+- `environments/dev/` - Dev environment configuration
+- `environments/prod/` - Production configuration
+- `scripts/` - Automation scripts
+
+## Naming Conventions
+
+- Resources: `{project}-{env}-{resource-type}-{name}`
+- Modules: lowercase with hyphens
+- [Your conventions here]
+
+## Getting Help
+
+- Team channel: #your-sre-channel
+- Documentation: [link to wiki]
+```
+
+### Nested CLAUDE.md Files for Monorepos
+
+For large monorepos, you can add `CLAUDE.md` files in subdirectories. Claude reads all relevant files as it navigates your codebase:
+
+```
+infrastructure/
+├── CLAUDE.md                    # Root: Organization-wide context
+├── bootstrap/
+│   ├── CLAUDE.md               # Specific: Tenant provisioning details
+│   └── terraform/
+├── networking/
+│   ├── CLAUDE.md               # Specific: VPC and firewall context
+│   └── terraform/
+└── compute/
+    ├── CLAUDE.md               # Specific: GKE cluster details
+    └── terraform/
+```
+
+See [DEPLOYMENT.md](./DEPLOYMENT.md#repository-structures-and-context-files) for detailed patterns and examples.
+
+### Personal Preferences with CLAUDE.local.md
+
+For your personal working style (not committed to git):
+
+```bash
+# Create personal preferences file (gitignored)
+cat > CLAUDE.local.md << 'EOF'
+# My Preferences
+
+- Always run terraform fmt before showing me code
+- I prefer explicit variable names over abbreviations
+- My default GCP project: dev-myname-sandbox
+EOF
+```
+
+Add `CLAUDE.local.md` and `**/CLAUDE.local.md` to your `.gitignore`.
+
+---
+
 ## Common Workflows
 
 ### Workflow 1: Making Terraform Changes

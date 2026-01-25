@@ -7,7 +7,7 @@ Safety system for using Claude Code with terraform that:
 - Prompts for approval on safe commands (`plan`, `validate`, `fmt`, etc.)
 - Logs all terraform operations with timestamps
 
-## Installation (5 minutes)
+## Installation
 
 ### 1. Prerequisites
 
@@ -19,14 +19,48 @@ python3 --version
 claude --version
 ```
 
-### 2. Verify Files Are in Place
+### 2. Create Your CLAUDE.md File
+
+Create a `CLAUDE.md` file at the root of your repo to give Claude context about your infrastructure:
+
+```bash
+cat > CLAUDE.md << 'EOF'
+# Infrastructure Context
+
+## What This Repo Manages
+
+- [Brief description of infrastructure]
+- GCP projects: [list your projects]
+- Environments: dev, staging, prod
+
+## Important Constraints
+
+- Never run terraform apply - all changes go through PR workflow
+- [Add your team-specific rules here]
+
+## File Structure
+
+- `modules/` - Reusable terraform modules
+- `environments/` - Per-environment configurations
+- [Describe your actual structure]
+
+## Getting Help
+
+- Team channel: #your-team-channel
+- On-call: [your oncall process]
+EOF
+```
+
+Customize this for your actual infrastructure. Claude reads this file to understand your repo. See [DEPLOYMENT.md](./docs/DEPLOYMENT.md#repository-structures-and-context-files) for nested CLAUDE.md patterns in monorepos.
+
+### 3. Verify Hook Files Are in Place
 
 ```bash
 ls -la .claude/
 # Should see: hooks/, docs/, settings.json
 ```
 
-### 3. Test the Hooks
+### 4. Test the Hooks
 
 ```bash
 # Run automated tests
@@ -42,7 +76,7 @@ PASS: Non-terraform commands allowed
 PASS: Audit log created
 ```
 
-### 4. Try It Out
+### 5. Try It Out
 
 ```bash
 # Start Claude Code in this repo
