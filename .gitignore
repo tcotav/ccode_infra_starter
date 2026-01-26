@@ -4,6 +4,8 @@
 # Claude Code local settings (user-specific overrides)
 .claude/settings.local.json
 
-# Claude Code personal context files (user preferences, never commit)
+# AI agent personal context files (user preferences, never commit)
+AGENTS.local.md
+**/AGENTS.local.md
 CLAUDE.local.md
 **/CLAUDE.local.md

@@ -32,22 +32,22 @@ chmod +x .claude/hooks/*.py
 ./.claude/docs/test-hooks.sh
 ```
 
-### 3. Create CLAUDE.md for Your Repository
+### 3. Create Context File for Your Repository
 
 ```bash
 # Copy the example as a starting point
-cp CLAUDE.md CLAUDE.md.example
-# Create your own CLAUDE.md with your infrastructure context
-vim CLAUDE.md  # or use your preferred editor
+cp AGENTS.md AGENTS.md.example
+# Create your own context file with your infrastructure details
+vim AGENTS.md  # or use your preferred editor
 ```
 
-Your CLAUDE.md should include:
+Your context file should include:
 - What infrastructure this repo manages (GKE clusters, Cloud SQL, networking, etc.)
 - Which environments (dev, staging, prod)
 - Team conventions and approval requirements
 - Links to runbooks or architecture docs
 
-See the example file for the full template and guidance.
+**Note:** This repo uses AGENTS.md (with CLAUDE.md as a symlink) to support multiple AI coding agents. You can use either naming convention in your repos. See the example file for the full template and guidance.
 
 ### 4. Start Using Claude Code
 
@@ -102,7 +102,7 @@ terraform output             # View outputs
 - **[Usage Guide](.claude/docs/README.md)** - Comprehensive documentation for teams
 - **[Testing Guide](.claude/docs/TESTING.md)** - How to test and troubleshoot
 - **[Deployment Guide](.claude/docs/DEPLOYMENT.md)** - Rolling out to multiple repos
-- **[CLAUDE.md](CLAUDE.md)** - Project context for Claude Code (and example for your repos)
+- **[AGENTS.md](AGENTS.md)** - Project context for AI coding agents (example for your repos, also accessible as CLAUDE.md)
 
 ## How It Works
 
@@ -155,7 +155,8 @@ Hooks provide **technical enforcement** rather than relying on Claude's behavior
 └── README.md                  # Complete devcontainer documentation
 
 .gitignore                     # Excludes audit logs
-CLAUDE.md                      # Project context for Claude Code
+AGENTS.md                      # Project context for AI coding agents
+CLAUDE.md -> AGENTS.md         # Symlink for backwards compatibility
 README.md                      # This file
 ```
 
@@ -342,7 +343,7 @@ cat .claude/audit/terraform.log | jq 'select(.decision == "BLOCKED")'
 - Fork this repository
 - Make your changes
 - Submit a pull request
-- See [CLAUDE.md](CLAUDE.md) for development guidelines
+- See [AGENTS.md](AGENTS.md) for development guidelines
 
 ## License
 

@@ -19,12 +19,13 @@ python3 --version
 claude --version
 ```
 
-### 2. Create Your CLAUDE.md File
+### 2. Create Your Context File
 
-Create a `CLAUDE.md` file at the root of your repo to give Claude context about your infrastructure:
+Create a context file (AGENTS.md or CLAUDE.md) at the root of your repo to give AI agents context about your infrastructure:
 
 ```bash
-cat > CLAUDE.md << 'EOF'
+# Use AGENTS.md for tool-agnostic naming, or CLAUDE.md if you prefer
+cat > AGENTS.md << 'EOF'
 # Infrastructure Context
 
 ## What This Repo Manages
@@ -51,7 +52,7 @@ cat > CLAUDE.md << 'EOF'
 EOF
 ```
 
-Customize this for your actual infrastructure. Claude reads this file to understand your repo. See [DEPLOYMENT.md](./docs/DEPLOYMENT.md#repository-structures-and-context-files) for nested CLAUDE.md patterns in monorepos.
+Customize this for your actual infrastructure. AI agents read this file to understand your repo. See [DEPLOYMENT.md](./docs/DEPLOYMENT.md#repository-structures-and-context-files) for nested context file patterns in monorepos.
 
 ### 3. Verify Hook Files Are in Place
 

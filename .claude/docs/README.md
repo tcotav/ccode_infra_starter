@@ -127,21 +127,23 @@ Example log entry:
 
 ---
 
-## Setting Up Your CLAUDE.md
+## Setting Up Your Context File
 
-Claude Code reads `CLAUDE.md` files to understand your repository. Creating one for your infrastructure repo gives Claude essential context about your environment, constraints, and conventions.
+AI coding agents can read context files (AGENTS.md or CLAUDE.md) to understand your repository. Creating one for your infrastructure repo gives the agent essential context about your environment, constraints, and conventions.
+
+**File naming:** You can use either `AGENTS.md` (tool-agnostic) or `CLAUDE.md` (Claude-specific). This repository uses AGENTS.md with CLAUDE.md as a symlink for backwards compatibility.
 
 ### Why This Matters
 
-Without context, Claude treats your repo as generic terraform. With a good `CLAUDE.md`, Claude understands:
+Without context, AI agents treat your repo as generic terraform. With a good context file, they understand:
 - Which GCP projects you manage
 - What environments exist (dev/staging/prod)
 - Team-specific naming conventions
 - What actions require extra caution
 
-### Create Your CLAUDE.md
+### Create Your Context File
 
-Add a `CLAUDE.md` file at the root of your repo:
+Add an `AGENTS.md` (or `CLAUDE.md`) file at the root of your repo:
 
 ```markdown
 # Infrastructure Context
@@ -187,23 +189,25 @@ Describe your repo layout so Claude can navigate effectively:
 - Documentation: [link to wiki]
 ```
 
-### Nested CLAUDE.md Files for Monorepos
+### Nested Context Files for Monorepos
 
-For large monorepos, you can add `CLAUDE.md` files in subdirectories. Claude reads all relevant files as it navigates your codebase:
+For large monorepos, you can add context files in subdirectories. AI agents can read all relevant files as they navigate your codebase:
 
 ```
 infrastructure/
-├── CLAUDE.md                    # Root: Organization-wide context
+├── AGENTS.md                    # Root: Organization-wide context
 ├── bootstrap/
-│   ├── CLAUDE.md               # Specific: Tenant provisioning details
+│   ├── AGENTS.md               # Specific: Tenant provisioning details
 │   └── terraform/
 ├── networking/
-│   ├── CLAUDE.md               # Specific: VPC and firewall context
+│   ├── AGENTS.md               # Specific: VPC and firewall context
 │   └── terraform/
 └── compute/
-    ├── CLAUDE.md               # Specific: GKE cluster details
+    ├── AGENTS.md               # Specific: GKE cluster details
     └── terraform/
 ```
+
+**Note:** You can use AGENTS.md or CLAUDE.md interchangeably. Both work with Claude Code.
 
 See [DEPLOYMENT.md](./DEPLOYMENT.md#repository-structures-and-context-files) for detailed patterns and examples.
 
