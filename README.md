@@ -32,7 +32,24 @@ chmod +x .claude/hooks/*.py
 ./.claude/docs/test-hooks.sh
 ```
 
-### 3. Start Using Claude Code
+### 3. Create CLAUDE.md for Your Repository
+
+```bash
+# Copy the example as a starting point
+cp CLAUDE.md CLAUDE.md.example
+# Create your own CLAUDE.md with your infrastructure context
+vim CLAUDE.md  # or use your preferred editor
+```
+
+Your CLAUDE.md should include:
+- What infrastructure this repo manages (GKE clusters, Cloud SQL, networking, etc.)
+- Which environments (dev, staging, prod)
+- Team conventions and approval requirements
+- Links to runbooks or architecture docs
+
+See the example file for the full template and guidance.
+
+### 4. Start Using Claude Code
 
 ```bash
 claude
