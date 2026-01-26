@@ -295,33 +295,40 @@ echo "3. Commit and PR"
 
 ## Repository Structures and Context Files
 
-### Overview: CLAUDE.md and CLAUDE.local.md
+### Overview: Context Files (AGENTS.md / CLAUDE.md)
 
-Claude Code reads context files to understand your repository:
+AI coding agents read context files to understand your repository. This repository uses AGENTS.md for tool-agnostic naming, with CLAUDE.md as a symlink for backwards compatibility.
 
-- **CLAUDE.md** - Project context (COMMITTED to git)
+**Naming options:**
+- **AGENTS.md** - Tool-agnostic naming (recommended for multi-tool teams)
+- **CLAUDE.md** - Claude-specific naming (works if you only use Claude Code)
+- Either name works - choose based on your team's preference
+
+**File types:**
+
+- **AGENTS.md / CLAUDE.md** - Project context (COMMITTED to git)
   - Repository purpose and structure
   - Team conventions and constraints
   - Infrastructure context
   - What commands are safe vs dangerous in this repo
 
-- **CLAUDE.local.md** - Personal preferences (GITIGNORED)
+- **AGENTS.local.md / CLAUDE.local.md** - Personal preferences (GITIGNORED)
   - Your working style preferences
   - Personal shortcuts or reminders
   - Environment-specific notes
   - Never committed to git
 
-Both files are read by Claude Code and provide context for AI assistance.
+Both files provide context for AI assistance. Examples below use AGENTS.md, but CLAUDE.md works identically.
 
-### Nested CLAUDE.md Files for Monorepos
+### Nested Context Files for Monorepos
 
-Claude Code supports nested context files - each subdirectory can have its own CLAUDE.md that adds specific context for that area of the codebase.
+AI coding agents support nested context files - each subdirectory can have its own context file that adds specific information for that area of the codebase.
 
 **How it works:**
-- Root CLAUDE.md provides organization-wide context
-- Subdirectory CLAUDE.md files add specific context for that area
+- Root context file (AGENTS.md or CLAUDE.md) provides organization-wide context
+- Subdirectory context files add specific context for that area
 - Context accumulates as you navigate deeper
-- All CLAUDE.md files should be committed to git
+- All context files should be committed to git
 
 ### Repository Structure Patterns
 
@@ -330,29 +337,29 @@ Claude Code supports nested context files - each subdirectory can have its own C
 **Example structure:**
 ```
 infrastructure/
-├── CLAUDE.md                    # Root: General infrastructure context
+├── AGENTS.md                    # Root: General infrastructure context
 ├── .claude/                     # Hooks apply to entire repo
 │   ├── settings.json
 │   └── hooks/
 │       └── terraform-validator.py
 ├── bootstrap/
-│   ├── CLAUDE.md               # Specific: Tenant creation process
+│   ├── AGENTS.md               # Specific: Tenant creation process
 │   └── terraform/
 │       └── main.tf
 ├── billing-etl/
-│   ├── CLAUDE.md               # Specific: Multi-cloud billing context
+│   ├── AGENTS.md               # Specific: Multi-cloud billing context
 │   └── src/
 │       └── etl.py
 ├── tenant-configs/
-│   ├── CLAUDE.md               # Specific: Config file conventions
+│   ├── AGENTS.md               # Specific: Config file conventions
 │   └── tenants/
 │       ├── app1.yaml
 │       └── app2.yaml
-└── .gitignore                  # Excludes CLAUDE.local.md files
+└── .gitignore                  # Excludes AGENTS.local.md, CLAUDE.local.md
 
 ```
 
-**Root CLAUDE.md example:**
+**Root context file example (AGENTS.md):**
 ```markdown
 # Infrastructure Monorepo
 
@@ -377,7 +384,7 @@ This repository manages our entire infrastructure lifecycle.
 - Config changes: Requires app team review + platform team review
 ```
 
-**Subdirectory CLAUDE.md example** (bootstrap/CLAUDE.md):
+**Subdirectory context file example (bootstrap/AGENTS.md):**
 ```markdown
 # Bootstrap - Tenant Provisioning
 
@@ -418,43 +425,43 @@ Standard process:
 ```
 # Repository: sandbox-infrastructure
 sandbox-infrastructure/
-├── CLAUDE.md                    # Context: Sandbox environment
+├── AGENTS.md                    # Context: Sandbox environment
 ├── .claude/                     # Hooks for this repo
 │   └── settings.json
 ├── tenant-app1/
-│   ├── CLAUDE.md               # Specific: This tenant's resources
+│   ├── AGENTS.md               # Specific: This tenant's resources
 │   └── terraform/
 │       └── main.tf
 └── tenant-app2/
-    ├── CLAUDE.md
+    ├── AGENTS.md
     └── terraform/
 
 # Repository: webservices-infrastructure
 webservices-infrastructure/
-├── CLAUDE.md                    # Context: Production web tier
+├── AGENTS.md                    # Context: Production web tier
 ├── .claude/                     # Same hooks, different repo
 │   └── settings.json
 ├── tenant-api-gateway/
-│   ├── CLAUDE.md
+│   ├── AGENTS.md
 │   └── terraform/
 └── tenant-user-service/
-    ├── CLAUDE.md
+    ├── AGENTS.md
     └── terraform/
 
 # Repository: dataservices-infrastructure
 dataservices-infrastructure/
-├── CLAUDE.md                    # Context: Data platform
+├── AGENTS.md                    # Context: Data platform
 ├── .claude/                     # Same hooks, different repo
 │   └── settings.json
 ├── tenant-analytics/
-│   ├── CLAUDE.md
+│   ├── AGENTS.md
 │   └── terraform/
 └── tenant-ml-pipeline/
-    ├── CLAUDE.md
+    ├── AGENTS.md
     └── terraform/
 ```
 
-**Functional area CLAUDE.md example** (webservices-infrastructure/CLAUDE.md):
+**Functional area context file example (webservices-infrastructure/AGENTS.md):**
 ```markdown
 # Web Services Infrastructure
 
@@ -492,7 +499,7 @@ Examples: tenant-api-gateway, tenant-user-service
 - Tenant ownership: See OWNERS file in each tenant directory
 ```
 
-**Tenant-specific CLAUDE.md example** (tenant-api-gateway/CLAUDE.md):
+**Tenant-specific context file example (tenant-api-gateway/AGENTS.md):**
 ```markdown
 # API Gateway Tenant
 
@@ -529,18 +536,20 @@ Central API gateway for all web services traffic.
 - Secondary: webservices-sre (#webservices-sre)
 ```
 
-### Using CLAUDE.local.md for Personal Preferences
+### Using Local Preference Files
 
-**CLAUDE.local.md** is for YOUR preferences - never committed to git.
+**AGENTS.local.md** (or **CLAUDE.local.md**) is for YOUR preferences - never committed to git.
 
 **Add to .gitignore:**
 ```
-# Claude Code personal preferences
+# AI agent personal preferences
+AGENTS.local.md
+**/AGENTS.local.md
 CLAUDE.local.md
 **/CLAUDE.local.md
 ```
 
-**Example CLAUDE.local.md** (root or any subdirectory):
+**Example local preferences file** (AGENTS.local.md or CLAUDE.local.md, root or any subdirectory):
 ```markdown
 # My Personal Preferences
 
@@ -586,26 +595,28 @@ Instead of asking me to approve each time, here's what I typically run:
    cp -r /path/to/template/.claude .
    ```
 
-2. **Create root CLAUDE.md with organization context**
+2. **Create root context file with organization context (AGENTS.md or CLAUDE.md)**
 
-3. **Add subdirectory CLAUDE.md files for each major area:**
-   - bootstrap/CLAUDE.md
-   - billing-etl/CLAUDE.md
-   - tenant-configs/CLAUDE.md
+3. **Add subdirectory context files for each major area:**
+   - bootstrap/AGENTS.md
+   - billing-etl/AGENTS.md
+   - tenant-configs/AGENTS.md
    - (One-time effort, but very valuable)
 
 4. **Update .gitignore:**
    ```
-   # Claude Code
+   # AI agent preferences and audit logs
    .claude/audit/
    .claude/settings.local.json
+   AGENTS.local.md
+   **/AGENTS.local.md
    CLAUDE.local.md
    **/CLAUDE.local.md
    ```
 
 5. **Commit everything:**
    ```bash
-   git add .claude/ .gitignore CLAUDE.md */CLAUDE.md
+   git add .claude/ .gitignore AGENTS.md */AGENTS.md
    git commit -m "Add Claude Code hooks and context files"
    ```
 
@@ -621,12 +632,12 @@ Instead of asking me to approve each time, here's what I typically run:
    done
    ```
 
-2. **Create environment-specific root CLAUDE.md:**
-   - sandbox-infrastructure/CLAUDE.md - Note it's dev environment
-   - webservices-infrastructure/CLAUDE.md - Note it's production, extra caution
-   - dataservices-infrastructure/CLAUDE.md - Note data sensitivity
+2. **Create environment-specific root context files:**
+   - sandbox-infrastructure/AGENTS.md - Note it's dev environment
+   - webservices-infrastructure/AGENTS.md - Note it's production, extra caution
+   - dataservices-infrastructure/AGENTS.md - Note data sensitivity
 
-3. **Add tenant-specific CLAUDE.md files:**
+3. **Add tenant-specific context files:**
    - Optional but recommended for complex tenants
    - Essential for tenants with special constraints
 
@@ -637,21 +648,21 @@ Instead of asking me to approve each time, here's what I typically run:
 ### Best Practices for Context Files
 
 **DO:**
-- Keep CLAUDE.md focused on facts, not preferences
-- Update CLAUDE.md when conventions change
+- Keep context files focused on facts, not preferences
+- Update context files when conventions change
 - Include examples of good patterns in your repo
 - Link to relevant documentation (wiki, runbooks)
 - Document what makes this repo special or dangerous
 
 **DON'T:**
-- Put secrets or credentials in CLAUDE.md (it's committed!)
-- Make CLAUDE.md too long (aim for 50-200 lines)
+- Put secrets or credentials in context files (they're committed!)
+- Make context files too long (aim for 50-200 lines)
 - Duplicate information that's already in README.md
-- Put personal preferences in CLAUDE.md (use CLAUDE.local.md)
+- Put personal preferences in AGENTS.md/CLAUDE.md (use local preference files)
 
-**CLAUDE.md is for Claude, README.md is for humans:**
+**Context files are for AI agents, README is for humans:**
 - README: What this repo does, how to get started, where to get help
-- CLAUDE.md: Constraints, conventions, structure, dangerous operations
+- AGENTS.md/CLAUDE.md: Constraints, conventions, structure, dangerous operations
 
 ---
 
