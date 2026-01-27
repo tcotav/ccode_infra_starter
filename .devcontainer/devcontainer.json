@@ -1,5 +1,5 @@
 {
-  "name": "Claude Code Sandbox",
+  "name": "Terraform SRE - Claude Code Safe Environment",
   "build": {
     "dockerfile": "Dockerfile",
     "args": {
