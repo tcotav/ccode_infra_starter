@@ -206,10 +206,10 @@ When using AI coding agents with terraform, the devcontainer provides critical i
 - Isolated environment with network controls
 - All hook scripts ready to run immediately
 
-### Using the Devcontainer
+### Using the Devcontainer with VSCode
 
 **Prerequisites:**
-- Docker Desktop installed and running
+- Container runtime (Docker, Podman, Rancher Desktop, etc.) installed and running
 - VSCode with "Dev Containers" extension
 
 **Quick start:**
@@ -225,6 +225,29 @@ Once running:
 - Claude Code extension runs in container context
 - Hooks execute in container Python environment
 - Terraform commands execute in isolated container
+
+### Using the Dockerfile Without VSCode
+
+If you're not using VSCode, you can build and use the Docker image directly:
+
+```bash
+# Build the image
+cd .devcontainer
+docker build -t terraform-sre:local .
+
+# Run interactive shell in container
+docker run -it --rm \
+  -v $(pwd):/workspace \
+  -w /workspace \
+  --cap-add=NET_ADMIN \
+  --cap-add=NET_RAW \
+  terraform-sre:local /bin/zsh
+
+# Inside the container, hooks work the same way
+terraform plan
+```
+
+**Note:** When using the Dockerfile directly, you'll need to manually configure credential mounting and environment variables that devcontainer.json normally handles.
 
 ### Devcontainer Architecture
 
@@ -246,7 +269,19 @@ The container provides:
 - Process isolation (can kill container if needed)
 - Version pinning (same terraform/Python for everyone)
 
-**Important:** The container is NOT a security boundary for malicious actors. It's an operational safety layer that adds defense-in-depth when AI assists with infrastructure work.
+**What this protects against:**
+- Accidental file modifications outside your workspace
+- AI mistakes that could affect your host system
+- Unintended command execution impacting local environment
+- Version inconsistencies across team members
+
+**What this does NOT protect against:**
+- Malicious code intentionally designed to escape containers
+- Determined attackers exploiting container escape vulnerabilities
+- Social engineering or credential theft
+- Bypassing IAM permissions or cloud provider security
+
+**Bottom line:** This is an operational safety layer for AI-assisted development, not a security boundary against malicious actors. Your existing security controls (IAM, state locking, PR reviews) remain essential.
 
 ### Alternative: Local Installation
 
@@ -314,6 +349,27 @@ TF_COMMAND = r"\b(terraform|tf|tform|tfwrapper)\b"
 
 **Note:** Shell aliases (like `alias tf=terraform`) don't need configuration. They don't work in subprocess calls, so they can't bypass hooks anyway.
 
+### Managing Hook Customizations
+
+If you customize the hooks for your organization:
+
+**Track your changes:**
+- Document customizations in comments within the hook files
+- Consider maintaining a `CUSTOMIZATIONS.md` file listing your changes
+- Use git to track changes: `git log .claude/hooks/`
+
+**Upgrading hooks:**
+- When this project releases new hook versions, you'll need to manually merge changes
+- Keep your customizations minimal to simplify updates
+- Consider contributing broadly-useful customizations back to this project
+
+**Multi-repository consistency:**
+- Decide if customizations should be per-repo or organization-wide
+- For org-wide rules, maintain a canonical hooks repository and copy to other repos
+- Document the process for propagating hook updates across your repositories
+
+This is an organizational problem that varies by team structure. Choose an approach that fits your workflow.
+
 ### Per-Environment Rules
 
 Different repos can have different rules:
@@ -328,7 +384,7 @@ See [Deployment Guide - Customization](.claude/docs/DEPLOYMENT.md#customization-
 - **Claude Code** - [Download here](https://claude.ai/download)
 - **Terraform** - Any version (hooks are terraform-agnostic, devcontainer includes 1.14.3)
 - **GCP authentication** - `gcloud auth login` (for terraform to work)
-- **Container Runtime + VSCode Dev Containers extension** - For isolated development environment (recommended)
+- **Container runtime + VSCode Dev Containers extension** - Optional, for isolated development environment (recommended). Supports Docker, Podman, Rancher Desktop, OrbStack, and compatible runtimes
 
 ## FAQ
 
@@ -340,6 +396,15 @@ A: Yes. The hooks only block Claude Code, not you. Run `terraform apply` directl
 
 A: Temporarily disable by renaming `.claude/settings.json` to `.claude/settings.json.disabled`. Restart Claude session.
 
+**Q: How do I completely disable the devcontainer and hooks?**
+
+A: To remove all safety mechanisms and run Claude Code directly on your host system:
+1. Close VSCode devcontainer (if using)
+2. Reopen repository locally (not in container)
+3. Remove or rename `.claude/settings.json` to disable hooks
+
+**This is not recommended.** You lose both container isolation and hook validation, returning to direct AI command execution on your host machine. Only do this if you've determined the safety mechanisms don't fit your workflow after thorough evaluation.
+
 **Q: Do I need to authenticate to anything?**
 
 A: Just your normal GCP/AWS/etc. authentication for terraform. The hooks themselves require no additional auth.
@@ -347,6 +412,10 @@ A: Just your normal GCP/AWS/etc. authentication for terraform. The hooks themsel
 **Q: Will this work with Atlantis/Terraform Cloud?**
 
 A: Yes. Hooks are for local development only. Your CI/CD pipeline is unchanged.
+
+**Q: How do I use this devcontainer setup in CI/CD?**
+
+A: CI/CD integration is not covered by this project. The devcontainer and hooks are designed for local development workflows with Claude Code. Your CI/CD pipelines (Atlantis, GitLab CI, GitHub Actions, etc.) should continue using their existing terraform execution environments and approval workflows.
 
 **Q: What about kubectl, helm, gcloud commands?**
 
@@ -386,24 +455,29 @@ git push origin feature/staging-cloudsql
 
 ## Audit Trail
 
-All terraform command attempts are logged with timestamps:
+All terraform command attempts are logged with timestamps. Logs are automatically rotated daily:
 
 ```bash
-# View recent commands
-tail -20 .claude/audit/terraform.log | jq .
+# View today's commands
+tail -20 .claude/audit/terraform-$(date +%Y-%m-%d).log | jq .
 
-# See only blocked attempts
-cat .claude/audit/terraform.log | jq 'select(.decision == "BLOCKED")'
+# View all recent commands across dates
+cat .claude/audit/terraform-*.log | tail -20 | jq .
+
+# See only blocked attempts from today
+cat .claude/audit/terraform-$(date +%Y-%m-%d).log | jq 'select(.decision == "BLOCKED")'
 
 # Example log entry
 {
-  "timestamp": "2026-01-23T14:30:15.123456",
+  "timestamp": "2026-01-27T14:30:15.123456",
   "command": "terraform plan -lock=false",
   "decision": "PENDING_APPROVAL",
   "working_dir": "/Users/you/repos/infra-prod",
   "reason": "Awaiting user approval"
 }
 ```
+
+**Log rotation:** Logs are automatically rotated by date (e.g., `terraform-2026-01-27.log`). Old logs persist for your audit needs and can be archived or deleted based on your retention policy.
 
 ## Support
 

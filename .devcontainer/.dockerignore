@@ -1,0 +1,61 @@
+# Terraform state and cache
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+.terraform.lock.hcl
+terraform.tfvars
+*.tfvars
+*.auto.tfvars
+
+# Claude Code audit logs
+.claude/audit/
+
+# Secrets and credentials
+secrets/
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+*.json  # Catches service account keys, be careful with legitimate JSON
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Development files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+node_modules/
+dist/
+build/
+*.egg-info/
+__pycache__/
+*.pyc
+*.pyo
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.circleci/
+Jenkinsfile
+
+# Documentation (not needed in container image)
+*.md
+docs/
+
+# Large files and logs
+*.log
+*.tar
+*.tar.gz
+*.zip
+*.iso

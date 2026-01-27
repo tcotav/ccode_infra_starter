@@ -131,11 +131,79 @@ The container includes network administration capabilities for the firewall scri
 - iptables, ipset, and iproute2 installed
 - Firewall initialization runs on container start
 
+### Restricting Outbound Network Access (Optional)
+
+For additional isolation, you can restrict which external services the container can access. This is useful when you want to limit AI-executed commands to specific cloud APIs or prevent unintended network calls.
+
+**Example: Restrict to GCP APIs only**
+
+Add network restrictions to `devcontainer.json`:
+
+```json
+{
+  "runArgs": [
+    "--cap-add=NET_ADMIN",
+    "--cap-add=NET_RAW",
+    "--network=isolated-terraform"
+  ],
+  "initializeCommand": "docker network create isolated-terraform || true"
+}
+```
+
+Then create custom iptables rules in `.devcontainer/init-network-policy.sh`:
+
+```bash
+#!/bin/bash
+# Allow GCP API endpoints
+iptables -A OUTPUT -d 142.250.0.0/15 -j ACCEPT  # googleapis.com range
+iptables -A OUTPUT -d 8.8.8.8 -j ACCEPT         # DNS
+iptables -A OUTPUT -d 8.8.4.4 -j ACCEPT         # DNS
+
+# Allow localhost
+iptables -A OUTPUT -d 127.0.0.1 -j ACCEPT
+
+# Allow terraform registry
+iptables -A OUTPUT -d registry.terraform.io -j ACCEPT
+
+# Block everything else
+iptables -A OUTPUT -j REJECT
+```
+
+**Cautions:**
+- This will break provider downloads if terraform registry is blocked
+- May prevent git operations, pip installs, and other legitimate tools
+- Difficult to maintain as cloud provider IP ranges change
+- Can significantly slow down your workflow
+
+**Recommendation:** Only implement network restrictions if required by your organization's security policy. The hook system and container isolation already provide substantial safety without network restrictions.
+
 ## Volumes
 
 **Persistent storage across rebuilds:**
 - Command history: `claude-code-bashhistory-${devcontainerId}`
 - Claude configuration: `claude-code-config-${devcontainerId}`
+
+**Terraform provider cache:**
+For faster `terraform init`, mount the `.terraform` directory to persist downloaded providers:
+
+```json
+"mounts": [
+  "source=claude-code-bashhistory-${devcontainerId},target=/commandhistory,type=volume",
+  "source=claude-code-config-${devcontainerId},target=/home/node/.claude,type=volume",
+  "source=terraform-plugin-cache-${devcontainerId},target=/home/node/.terraform.d/plugin-cache,type=volume"
+]
+```
+
+Then configure terraform to use the cache by adding to `devcontainer.json`:
+
+```json
+"remoteEnv": {
+  "TF_PLUGIN_CACHE_DIR": "/home/node/.terraform.d/plugin-cache"
+}
+```
+
+**Terraform state management:**
+This configuration assumes you're using a remote backend (GCS, S3, Terraform Cloud, etc.) for state storage. The devcontainer does not persist local `.terraform` directories or `terraform.tfstate` files across container rebuilds. Always use remote backends for production infrastructure.
 
 ## Why These Tools?
 
@@ -175,11 +243,21 @@ For terraform to work with cloud providers, the container needs access to creden
 
 Add to `devcontainer.json` mounts array:
 
+**For macOS/Linux:**
 ```json
 "mounts": [
   "source=claude-code-bashhistory-${devcontainerId},target=/commandhistory,type=volume",
   "source=claude-code-config-${devcontainerId},target=/home/node/.claude,type=volume",
-  "source=${localEnv:HOME}${localEnv:USERPROFILE}/.config/gcloud,target=/home/node/.config/gcloud,type=bind,readonly"
+  "source=${localEnv:HOME}/.config/gcloud,target=/home/node/.config/gcloud,type=bind,readonly"
+]
+```
+
+**For Windows (WSL2):**
+```json
+"mounts": [
+  "source=claude-code-bashhistory-${devcontainerId},target=/commandhistory,type=volume",
+  "source=claude-code-config-${devcontainerId},target=/home/node/.claude,type=volume",
+  "source=${localEnv:USERPROFILE}\\.config\\gcloud,target=/home/node/.config/gcloud,type=bind,readonly"
 ]
 ```
 
@@ -192,8 +270,11 @@ Add to `devcontainer.json` mounts array:
 - Grants container access to all your gcloud credentials
 - Read-only mount prevents `gcloud auth login` inside container
 - Host and container must have compatible gcloud CLI versions
+- Platform-specific configuration (must choose correct mount path for your OS)
 
 **Best for:** Individual developers, local testing, non-production work
+
+**Note:** If you need to run `gcloud auth login` inside the container, remove the `readonly` flag from the mount. Be aware this grants the container write access to your credentials.
 
 ### Option 2: Service Account Key File
 
@@ -331,9 +412,10 @@ Update these values to pin or upgrade specific tools.
 ### Container performance
 
 **Problem:** Slow performance
-- Check Docker Desktop resource allocation (CPU, memory)
+- Check container runtime resource allocation (CPU, memory in Docker Desktop, Rancher Desktop, etc.)
 - Increase `NODE_OPTIONS` memory limit if working with large terraform states
 - Consider excluding large directories from the workspace mount
+- **Note:** Performance varies significantly across container runtimes and host operating systems. This configuration is untested across all environments.
 
 ### Hook not executing
 
@@ -535,7 +617,7 @@ Create `.pre-commit-config.yaml` in your repository root:
 repos:
   # Terraform formatting
   - repo: https://github.com/antonbabenko/pre-commit-terraform
-    rev: v1.96.1
+    rev: v1.96.1  # Update with: pre-commit autoupdate
     hooks:
       - id: terraform_fmt
         name: Terraform fmt
@@ -555,16 +637,15 @@ repos:
 
   # Secret scanning
   - repo: https://github.com/gitleaks/gitleaks
-    rev: v8.22.1
+    rev: v8.22.1  # Update with: pre-commit autoupdate
     hooks:
       - id: gitleaks
         name: Gitleaks
         description: Detect hardcoded secrets
-        entry: gitleaks detect --source . --no-git --verbose --redact
 
   # Shell scripts
   - repo: https://github.com/shellcheck-py/shellcheck-py
-    rev: v0.10.0.1
+    rev: v0.10.0.1  # Update with: pre-commit autoupdate
     hooks:
       - id: shellcheck
         name: ShellCheck
@@ -572,7 +653,7 @@ repos:
 
   # General quality
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v5.0.0  # Update with: pre-commit autoupdate
     hooks:
       - id: trailing-whitespace
         name: Trim trailing whitespace
@@ -587,6 +668,9 @@ repos:
       - id: detect-private-key
         name: Detect private keys
 ```
+
+**Keeping versions current:**
+Run `pre-commit autoupdate` periodically to update hook versions to latest releases. The `rev` tags above will become outdated over time.
 
 ### Using with AI Coding Agents
 
