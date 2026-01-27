@@ -134,6 +134,145 @@ Hooks provide **technical enforcement** rather than relying on Claude's behavior
 - Works even if Claude "forgets" the rules
 - Auditable and deterministic
 
+### Defense in Depth: Isolation Layers
+
+The safety architecture uses multiple layers of protection when AI assists with infrastructure:
+
+```mermaid
+graph TB
+    User["User (You)<br/>Reviews & Approves"]
+    Host["Host Machine<br/>Your laptop/workstation"]
+    Container["Docker Container<br/>Isolated environment"]
+    Claude["Claude Code<br/>AI assistant"]
+    PreHook["Pre-execution Hook<br/>terraform-validator.py"]
+    PostHook["Post-execution Hook<br/>terraform-logger.py"]
+    TF["Terraform<br/>Infrastructure changes"]
+
+    User -->|Interacts with| Claude
+    Claude -->|Runs in| Container
+    Container -->|Isolated from| Host
+    Claude -->|Attempts command| PreHook
+    PreHook -->|BLOCK| User
+    PreHook -->|PROMPT| User
+    User -->|Approve/Deny| PreHook
+    PreHook -->|ALLOW| TF
+    TF -->|Executes in| Container
+    TF -->|Result| PostHook
+    PostHook -->|Audit log| Container
+
+    style User fill:#e1f5ff
+    style Container fill:#fff4e1
+    style PreHook fill:#ffe1e1
+    style TF fill:#e1ffe1
+    style PostHook fill:#f0e1ff
+```
+
+**Key Protection Layers:**
+1. **Host Isolation** - Container boundary prevents AI commands from affecting your host machine
+2. **Hook Validation** - Pre-execution hook blocks/prompts before any terraform command runs
+3. **User Control** - You approve every action; AI cannot proceed without permission
+4. **Audit Trail** - Post-execution hook logs all attempts for compliance and review
+
+This multi-layered approach means even if one layer fails, others provide protection.
+
+## Isolated Development Environment (Recommended)
+
+### Why Devcontainer for AI-Assisted Infrastructure
+
+When using AI coding agents with terraform, the devcontainer provides critical isolation and consistency:
+
+**Safety Through Isolation**
+- AI-executed commands run in container, not on your host machine
+- Container boundary provides additional protection layer beyond hooks
+- Filesystem operations are sandboxed to container workspace
+- Can destroy/rebuild container if AI operations cause issues
+- Network policies can restrict container's outbound connections
+
+**Consistency Across Team**
+- Everyone uses identical tool versions (terraform, gcloud, Python)
+- Eliminates "works on my machine" issues
+- Hooks behave identically across all team members
+- No manual installation of 10+ CLI tools
+
+**Complete SRE Toolset**
+- Pre-installed: terraform 1.14.3, tflint, terraform-docs, gcloud, kubectl
+- Quality tools: shellcheck, pre-commit, gitleaks, bat, ripgrep, yq
+- VSCode extensions auto-configured for terraform and Python
+- Auto-formatting enabled for all relevant file types
+
+**Security Built-In**
+- gitleaks scanner prevents accidentally committing secrets
+- Pre-commit framework for additional safeguards
+- Isolated environment with network controls
+- All hook scripts ready to run immediately
+
+### Using the Devcontainer
+
+**Prerequisites:**
+- Docker Desktop installed and running
+- VSCode with "Dev Containers" extension
+
+**Quick start:**
+
+1. Open this repository in VSCode
+2. Click the blue "Reopen in Container" prompt, or
+3. Command palette: "Dev Containers: Reopen in Container"
+
+**First build takes a few minutes. Subsequent starts are fast (cached).**
+
+Once running:
+- All tools are ready immediately
+- Claude Code extension runs in container context
+- Hooks execute in container Python environment
+- Terraform commands execute in isolated container
+
+### Devcontainer Architecture
+
+The devcontainer complements the hook system by adding a process-level isolation layer:
+
+**Without devcontainer:**
+```
+Your host machine → Claude Code → Hooks → Terraform
+```
+
+**With devcontainer (recommended):**
+```
+Your host machine → Container boundary → Claude Code → Hooks → Terraform
+```
+
+The container provides:
+- Filesystem isolation (container can't modify host)
+- Network isolation (optional restrictions on outbound calls)
+- Process isolation (can kill container if needed)
+- Version pinning (same terraform/Python for everyone)
+
+**Important:** The container is NOT a security boundary for malicious actors. It's an operational safety layer that adds defense-in-depth when AI assists with infrastructure work.
+
+### Alternative: Local Installation
+
+If you prefer not to use devcontainer, install these tools locally:
+
+```bash
+# macOS
+brew install python3 terraform tflint terraform-docs gcloud kubectl
+
+# Ubuntu/Debian
+apt-get install python3 python3-pip
+# Then install terraform and cloud tools per vendor docs
+```
+
+Ensure Python 3 is available for the hook scripts. Note that tool versions may vary across team members.
+
+### Complete Documentation
+
+See [.devcontainer/README.md](.devcontainer/README.md) for:
+- Complete tool inventory and versions
+- Customization options (adding tools, changing versions)
+- Organizational deployment patterns
+- Credential management approaches
+- Troubleshooting guide
+- Pre-commit integration examples
+
 ## Repository Structure
 
 ```
@@ -185,77 +324,11 @@ See [Deployment Guide - Customization](.claude/docs/DEPLOYMENT.md#customization-
 
 ## Requirements
 
-- **Python 3.x** - For hook scripts
+- **Python 3.x** - For hook scripts (included in devcontainer)
 - **Claude Code** - [Download here](https://claude.ai/download)
-- **Terraform** - Any version (hooks are terraform-agnostic)
+- **Terraform** - Any version (hooks are terraform-agnostic, devcontainer includes 1.14.3)
 - **GCP authentication** - `gcloud auth login` (for terraform to work)
-
-## Development Environment
-
-### Devcontainer (Recommended)
-
-This repository includes a complete devcontainer configuration that provides all required tools and dependencies. Using the devcontainer is recommended for several reasons:
-
-**Consistency**
-- Everyone on your team uses identical tool versions
-- Eliminates "works on my machine" issues
-- No need to manually install terraform, gcloud, kubectl, etc.
-
-**Completeness**
-- All SRE tools pre-installed: terraform, tflint, terraform-docs, gcloud, kubectl
-- Quality tools included: shellcheck, pre-commit, gitleaks, bat, ripgrep, yq
-- VSCode extensions automatically configured for terraform and Python
-- Auto-formatting enabled for terraform, Python, and shell scripts
-
-**Security**
-- gitleaks scanner prevents accidentally committing secrets
-- Isolated environment with network controls
-- Pre-commit framework for additional safeguards
-
-**Hook Development**
-- Python 3 and all dependencies ready to use
-- Test scripts can run immediately without setup
-- shellcheck validates bash scripts as you write them
-
-### Using the Devcontainer
-
-**Prerequisites:**
-- Docker Desktop installed and running
-- VSCode with "Dev Containers" extension
-
-**Start the container:**
-
-1. Open this repository in VSCode
-2. Click the blue "Reopen in Container" prompt, or
-3. Command palette: "Dev Containers: Reopen in Container"
-
-**First build:**
-- The container build takes a few minutes on first run
-- Subsequent starts are fast (container is cached)
-- All tools are ready immediately after build completes
-
-**Tool versions:**
-- Terraform 1.14.3
-- tflint 0.55.1, terraform-docs 0.19.0
-- gcloud CLI (latest), kubectl (stable)
-- Python 3, pre-commit, gitleaks, yq, bat, ripgrep
-
-See [.devcontainer/README.md](.devcontainer/README.md) for complete details, customization options, and troubleshooting.
-
-### Local Installation (Alternative)
-
-If you prefer not to use the devcontainer, install these tools locally:
-
-```bash
-# macOS
-brew install python3 terraform tflint terraform-docs gcloud kubectl
-
-# Ubuntu/Debian
-apt-get install python3 python3-pip
-# Then install terraform and cloud tools per vendor docs
-```
-
-Ensure Python 3 is available for the hook scripts.
+- **Container Runtime + VSCode Dev Containers extension** - For isolated development environment (recommended)
 
 ## FAQ
 
@@ -345,9 +418,6 @@ cat .claude/audit/terraform.log | jq 'select(.decision == "BLOCKED")'
 - Submit a pull request
 - See [AGENTS.md](AGENTS.md) for development guidelines
 
-## License
-
-[Your license here - MIT recommended for broad adoption]
 
 ## Credits
 

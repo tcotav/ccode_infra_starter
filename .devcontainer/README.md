@@ -2,6 +2,56 @@
 
 This devcontainer provides a complete development environment for working with the terraform Claude Code safety hooks project.
 
+## Using with AI Coding Agents
+
+This devcontainer is specifically designed to provide an **additional isolation layer** when using AI coding agents like Claude Code with terraform infrastructure.
+
+### Why Isolation Matters for AI-Assisted Infrastructure
+
+**Defense in Depth**
+- AI commands execute inside the container, not on your host system
+- Filesystem operations are sandboxed to the container workspace
+- Safety hooks run in the container's Python environment
+- Container can be destroyed/rebuilt if AI operations cause issues
+- Provides process-level isolation complementing command-level hooks
+
+**How It Works with Claude Code**
+- Claude Code VSCode extension runs in the container context
+- All bash commands from Claude execute inside the container
+- Safety hooks (`.claude/hooks/*.py`) run using container's Python
+- Terraform state and configuration files are in the container workspace mount
+- Your host machine's filesystem is protected by the container boundary
+
+**Complementary Safety Layers**
+1. **Hooks** provide command-level blocking and approval prompts
+2. **Container** provides process-level isolation and sandboxing
+3. **User** maintains final approval authority for all actions
+4. **Audit logs** capture all attempts for compliance review
+
+Together, these layers implement defense-in-depth for AI-assisted infrastructure work.
+
+**Important Security Note:** The container is NOT a security boundary against malicious actors. It's an operational safety layer that adds protection when AI assists with infrastructure changes. It does not replace IAM permissions, state locking, or PR review processes.
+
+### Benefits for Teams
+
+**Consistency**
+- Everyone on the team uses identical tool versions
+- Hooks behave the same way across all environments
+- "Works on my machine" issues are eliminated
+- New team members get productive immediately
+
+**Rapid Onboarding**
+- One command starts the complete environment
+- No manual installation of 10+ CLI tools
+- All VSCode extensions pre-configured
+- Hook scripts ready to run immediately
+
+**Safe Experimentation**
+- Test hook changes in isolated environment
+- Can destroy and rebuild container without risk
+- Experiment with terraform configurations safely
+- Network policies can restrict outbound connections if needed
+
 ## What's Included
 
 ### Core Development Tools
@@ -117,6 +167,107 @@ Key environment variables set in the container:
 - `CLAUDE_PROJECT_DIR=/workspace` - Set by Claude Code for hook paths
 - `NODE_OPTIONS=--max-old-space-size=4096` - Increased memory for large codebases
 
+## Credential Management
+
+For terraform to work with cloud providers, the container needs access to credentials. Choose the approach that fits your security requirements:
+
+### Option 1: Mount gcloud Config (Recommended for Local Development)
+
+Add to `devcontainer.json` mounts array:
+
+```json
+"mounts": [
+  "source=claude-code-bashhistory-${devcontainerId},target=/commandhistory,type=volume",
+  "source=claude-code-config-${devcontainerId},target=/home/node/.claude,type=volume",
+  "source=${localEnv:HOME}${localEnv:USERPROFILE}/.config/gcloud,target=/home/node/.config/gcloud,type=bind,readonly"
+]
+```
+
+**Pros:**
+- Simple setup, uses your existing authentication
+- No additional credential files to manage
+- Works immediately after `gcloud auth login` on host
+
+**Cons:**
+- Grants container access to all your gcloud credentials
+- Read-only mount prevents `gcloud auth login` inside container
+- Host and container must have compatible gcloud CLI versions
+
+**Best for:** Individual developers, local testing, non-production work
+
+### Option 2: Service Account Key File
+
+Place a service account key file in your project and reference it:
+
+1. Add to `.gitignore`:
+   ```
+   secrets/
+   *.json
+   ```
+
+2. Add to `devcontainer.json`:
+   ```json
+   "remoteEnv": {
+     "GOOGLE_APPLICATION_CREDENTIALS": "/workspace/secrets/terraform-sa.json"
+   }
+   ```
+
+3. Create the key file:
+   ```bash
+   mkdir -p secrets
+   gcloud iam service-accounts keys create secrets/terraform-sa.json \
+     --iam-account=terraform@your-project.iam.gserviceaccount.com
+   ```
+
+**Pros:**
+- Scoped permissions (service account can have limited roles)
+- Works identically across team members
+- No dependency on host authentication
+
+**Cons:**
+- Key file must exist and be secured
+- Requires key rotation process
+- Risk of accidentally committing secrets (mitigated by gitleaks)
+
+**Best for:** Team environments, CI/CD patterns, production-like testing
+
+### Option 3: Environment Variable Passthrough
+
+Pass specific credentials as environment variables:
+
+Add to `devcontainer.json`:
+```json
+"remoteEnv": {
+  "GOOGLE_CREDENTIALS": "${localEnv:GOOGLE_CREDENTIALS}"
+}
+```
+
+**Pros:**
+- No file mounting required
+- Works with various credential formats
+- Can pass multiple cloud provider credentials
+
+**Cons:**
+- Must set environment variables before starting container
+- Credentials in environment variables can be less secure
+- More manual setup required
+
+**Best for:** CI/CD environments, automated testing, multiple cloud providers
+
+### Security Best Practices
+
+**Regardless of approach:**
+- Never commit credential files to git (use `.gitignore`)
+- Use gitleaks to scan for accidentally committed secrets
+- Rotate credentials regularly
+- Use least-privilege service accounts for terraform
+- Consider using separate credentials for dev/staging/prod
+
+**Additional safeguards:**
+- Run `gitleaks detect` before commits (included in devcontainer)
+- Use pre-commit hooks to prevent credential commits
+- Audit container access regularly via audit logs
+
 ## User Configuration
 
 The container runs as the `node` user (non-root) for security.
@@ -210,17 +361,281 @@ Update these values to pin or upgrade specific tools.
 - Includes npm/npx for Claude Code installation
 - Compatible with most SRE tooling
 
-## For Teams Copying This Setup
+## Organizational Deployment Patterns
 
-If you're using this devcontainer configuration in your own terraform repositories:
+### Per-Repository Devcontainers (Current Pattern)
 
-1. **Customize tool versions** - Update ARG variables for your needs
-2. **Add cloud-specific tools** - Include AWS CLI, Azure CLI, etc. as needed
-3. **Configure pre-commit** - Add `.pre-commit-config.yaml` for your hooks
-4. **Adjust VSCode settings** - Add team-specific formatting rules
-5. **Document customizations** - Update this README with your changes
+This repository uses a per-repo devcontainer where each terraform repo has its own `.devcontainer/` directory.
 
-See the main [CLAUDE.md](../CLAUDE.md) for guidance on adapting this project to your organization's needs.
+**Pros:**
+- Maximum flexibility per team
+- Easy to customize for specific infrastructure needs
+- No central infrastructure or container registry required
+- Teams can iterate quickly on their environment
+
+**Cons:**
+- Tool versions may drift across repositories
+- Duplicate Dockerfile configuration across repos
+- Harder to enforce organization-wide standards
+- Each team maintains their own container build
+
+**Best for:**
+- Small to medium teams
+- Organizations with diverse environment requirements
+- Early adoption phase of devcontainer usage
+- Teams that need rapid customization
+
+### Shared Base Image Pattern (Enterprise Scale)
+
+For larger organizations, consider building a base image centrally and referencing it:
+
+**Setup:**
+
+1. Create organization base image repository
+2. Build and publish to container registry
+3. Teams reference the image in their repos
+
+**Example `devcontainer.json` using shared image:**
+
+```json
+{
+  "name": "Terraform Infrastructure",
+  "image": "us-docker.pkg.dev/your-org/devimages/terraform-sre:v1.2.0",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "anthropic.claude-code",
+        "hashicorp.terraform"
+      ]
+    }
+  },
+  "remoteEnv": {
+    "TEAM": "platform-sre"
+  }
+}
+```
+
+**Pros:**
+- Consistent tooling across all repositories
+- Faster container startup (no build step, just pull)
+- Centralized version management and updates
+- Easier to enforce security and compliance standards
+
+**Cons:**
+- Requires container registry infrastructure
+- Less flexibility for individual teams
+- Coordinated rollout needed for updates
+- Teams must request additions to base image
+
+**Best for:**
+- Large organizations with many terraform repositories
+- Mature devcontainer adoption
+- Environments requiring strict compliance
+- Organizations with existing container registries
+
+### When to Use Which Pattern
+
+**Start with per-repository** if:
+- Your organization is new to devcontainers
+- You have fewer than 10 terraform repositories
+- Teams need different toolsets
+- You want to experiment and iterate quickly
+
+**Move to shared base image** when:
+- You have 10+ repositories using devcontainers
+- Tool version consistency becomes a problem
+- You need centralized security scanning of images
+- You have container registry infrastructure
+
+**Note:** You can transition from per-repo to shared base image gradually by having teams adopt the shared image as they're ready.
+
+## Customizing for Your Organization
+
+If you're adapting this devcontainer for your own terraform repositories:
+
+### Tool Versions
+
+Update ARG variables in [Dockerfile](Dockerfile):
+
+```dockerfile
+ARG TERRAFORM_VERSION=1.14.3  # Change to your required version
+ARG TFLINT_VERSION=0.55.1
+ARG GITLEAKS_VERSION=8.22.1
+```
+
+### Additional Cloud Providers
+
+Add AWS, Azure, or other cloud CLI tools:
+
+```dockerfile
+# AWS CLI
+RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" \
+    && unzip awscliv2.zip \
+    && ./aws/install \
+    && rm -rf aws awscliv2.zip
+
+# Azure CLI
+RUN curl -sL https://aka.ms/InstallAzureCLIDeb | bash
+```
+
+### Team-Specific Tools
+
+Add organization-specific utilities:
+
+```dockerfile
+# Internal company tools
+RUN pip3 install your-internal-terraform-wrapper
+RUN wget https://internal.example.com/tools/company-cli -O /usr/local/bin/company-cli
+```
+
+### VSCode Settings
+
+Adjust workspace settings in [devcontainer.json](devcontainer.json):
+
+```json
+"settings": {
+  "terraform.languageServer.enable": true,
+  "terraform.codelens.referenceCount": true
+}
+```
+
+### Pre-commit Hooks
+
+Add `.pre-commit-config.yaml` for your organization's standards (see next section for examples).
+
+### Documentation
+
+Update this README with:
+- Your organization's specific tool versions
+- Internal credential management procedures
+- Team contact information for support
+- Links to internal runbooks or architecture docs
+
+See the main [AGENTS.md](../AGENTS.md) for guidance on adapting this project to your organization's needs.
+
+## Pre-commit Integration
+
+Since the devcontainer includes all infrastructure tools, you can use pre-commit hooks to enforce quality standards before commits. This ensures consistent checks across your team.
+
+### Setup
+
+Install pre-commit in your repository:
+
+```bash
+# Inside the devcontainer
+pip3 install pre-commit
+pre-commit install
+```
+
+### Example Configuration
+
+Create `.pre-commit-config.yaml` in your repository root:
+
+```yaml
+repos:
+  # Terraform formatting
+  - repo: https://github.com/antonbabenko/pre-commit-terraform
+    rev: v1.96.1
+    hooks:
+      - id: terraform_fmt
+        name: Terraform fmt
+        description: Reformat terraform files to canonical format
+
+      - id: terraform_validate
+        name: Terraform validate
+        description: Validate terraform configuration
+        args:
+          - --hook-config=--retry-once-with-cleanup=true
+
+      - id: terraform_tflint
+        name: TFLint
+        description: Lint terraform files with tflint
+        args:
+          - --args=--config=__GIT_WORKING_DIR__/.tflint.hcl
+
+  # Secret scanning
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.22.1
+    hooks:
+      - id: gitleaks
+        name: Gitleaks
+        description: Detect hardcoded secrets
+        entry: gitleaks detect --source . --no-git --verbose --redact
+
+  # Shell scripts
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.10.0.1
+    hooks:
+      - id: shellcheck
+        name: ShellCheck
+        description: Lint shell scripts
+
+  # General quality
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        name: Trim trailing whitespace
+      - id: end-of-file-fixer
+        name: Fix end of files
+      - id: check-yaml
+        name: Check YAML syntax
+      - id: check-json
+        name: Check JSON syntax
+      - id: check-merge-conflict
+        name: Check for merge conflicts
+      - id: detect-private-key
+        name: Detect private keys
+```
+
+### Using with AI Coding Agents
+
+Pre-commit hooks run automatically before each commit, catching issues that AI might introduce:
+
+**Common catches:**
+- Terraform files not formatted with `terraform fmt`
+- Invalid terraform syntax
+- Hardcoded secrets or API keys
+- Shell scripts with common bugs
+- Trailing whitespace or incorrect line endings
+
+**Workflow:**
+
+1. Claude Code writes terraform or shell code
+2. You review the changes
+3. Run `git add` to stage files
+4. Run `git commit -m "message"`
+5. Pre-commit hooks run automatically
+6. If hooks fail, fix issues and commit again
+
+**Manual run:**
+
+```bash
+# Test hooks on all files (useful before committing)
+pre-commit run --all-files
+
+# Test specific hook
+pre-commit run terraform_fmt --all-files
+```
+
+### Benefits for Teams
+
+**Consistency:**
+- All team members run identical checks
+- No "works on my machine" for code quality
+- Devcontainer ensures same tool versions
+
+**Early Detection:**
+- Catch formatting issues before PR review
+- Detect secrets before they reach git history
+- Validate terraform before `terraform plan`
+
+**AI Safety:**
+- Additional verification layer for AI-generated code
+- Catches common mistakes AI might make
+- Enforces team standards automatically
+
+**Note:** Pre-commit hooks run locally and are advisory. They complement but don't replace the Claude Code safety hooks, which provide enforcement at the command execution level.
 
 ## References
 
