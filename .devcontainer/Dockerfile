@@ -29,6 +29,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   wget \
   python3 \
   python3-pip \
+  python3-venv \ 
   shellcheck \
   && apt-get clean && rm -rf /var/lib/apt/lists/*
 
@@ -101,17 +102,17 @@ RUN ARCH=$(dpkg --print-architecture) && \
   rm bat_${BAT_VERSION}_${ARCH}.deb && \
   bat --version
 
-# Install ripgrep (faster grep)
-ARG RIPGREP_VERSION=14.1.1
-RUN ARCH=$(dpkg --print-architecture) && \
-  wget "https://github.com/BurntSushi/ripgrep/releases/download/${RIPGREP_VERSION}/ripgrep_${RIPGREP_VERSION}-1_${ARCH}.deb" && \
-  dpkg -i ripgrep_${RIPGREP_VERSION}-1_${ARCH}.deb && \
-  rm ripgrep_${RIPGREP_VERSION}-1_${ARCH}.deb && \
-  rg --version
-
 # Install pre-commit (git hooks framework)
-RUN pip3 install --no-cache-dir pre-commit && \
-  pre-commit --version
+# Create a virtual environment
+RUN python3 -m venv /opt/venv
+
+# Activate the environment and install pre-commit
+# The shell is automatically in the venv for subsequent commands in the same RUN instruction
+RUN /opt/venv/bin/pip3 install --no-cache-dir pre-commit 
+
+# Set the VIRTUAL_ENV and update PATH for subsequent RUN, CMD, or ENTRYPOINT instructions
+ENV VIRTUAL_ENV=/opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 
 # Ensure default node user has access to /usr/local/share
 RUN mkdir -p /usr/local/share/npm-global && \
