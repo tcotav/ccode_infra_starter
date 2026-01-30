@@ -32,22 +32,48 @@ chmod +x .claude/hooks/*.py
 ./.claude/docs/test-hooks.sh
 ```
 
-### 3. Create Context File for Your Repository
+### 3. Customize AGENTS.md for Your Repository
+
+**Option A: Interactive Setup (Recommended)**
+
+Use Claude Code to customize AGENTS.md through a guided questionnaire:
 
 ```bash
-# Copy the example as a starting point
-cp AGENTS.md AGENTS.md.example
-# Create your own context file with your infrastructure details
+# Start Claude Code
+claude
+```
+
+Then paste this prompt:
+```
+I've just installed the Claude Code terraform safety hooks in this repository.
+Help me customize the AGENTS.md file for my team by asking me questions about:
+
+- The infrastructure this repository manages
+- Who uses this repository (team composition and experience level)
+- Our deployment workflow and approval processes
+- Any special conventions or constraints for this repo
+
+Ask me one question at a time. After I answer each question, ask the next one.
+When you have enough information, show me a draft of the customized AGENTS.md
+sections for my review before making any changes.
+```
+
+Claude will guide you through questions and customize the file with your specific infrastructure details.
+
+**Option B: Manual Editing**
+
+```bash
+# Edit AGENTS.md directly
 vim AGENTS.md  # or use your preferred editor
 ```
 
-Your context file should include:
+Include:
 - What infrastructure this repo manages (GKE clusters, Cloud SQL, networking, etc.)
 - Which environments (dev, staging, prod)
 - Team conventions and approval requirements
 - Links to runbooks or architecture docs
 
-**Note:** This repo uses AGENTS.md (with CLAUDE.md as a symlink) to support multiple AI coding agents. You can use either naming convention in your repos. See the example file for the full template and guidance.
+**Note:** This repo uses AGENTS.md (with CLAUDE.md as a symlink) to support multiple AI coding agents. You can use either naming convention in your repos. See [DEPLOYMENT.md](.claude/docs/DEPLOYMENT.md#step-2a-interactive-customization-with-claude-code-recommended) for details on the interactive setup.
 
 ### 4. Start Using Claude Code
 

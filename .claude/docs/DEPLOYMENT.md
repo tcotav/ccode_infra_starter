@@ -69,6 +69,112 @@ cat .claude/docs/TESTING.md
    - Add your team-specific context
    - Adjust examples to match your infrastructure
 
+### Step 2a: Interactive Customization with Claude Code (Recommended)
+
+After copying the hooks to your repository, use Claude Code to customize AGENTS.md for your specific infrastructure and team.
+
+#### Why Customize?
+
+The default AGENTS.md is generic. A customized version helps Claude Code provide better assistance by understanding:
+- What infrastructure this repository manages
+- Your team's conventions and constraints
+- Your deployment workflow and approval processes
+- Critical context that prevents mistakes
+
+#### How to Use Interactive Setup
+
+1. **Open Claude Code in your repository**
+   ```bash
+   cd /path/to/your-terraform-repo
+   claude-code
+   ```
+
+2. **Copy and paste this prompt:**
+
+   ```
+   I've just installed the Claude Code terraform safety hooks in this repository.
+   Help me customize the AGENTS.md file for my team by asking me questions about:
+
+   - The infrastructure this repository manages
+   - Who uses this repository (team composition and experience level)
+   - Our deployment workflow and approval processes
+   - Any special conventions or constraints for this repo
+
+   Ask me one question at a time. After I answer each question, ask the next one.
+   When you have enough information, show me a draft of the customized AGENTS.md
+   sections for my review before making any changes.
+   ```
+
+3. **Answer Claude's questions**
+
+   Claude will guide you through a structured interview, asking questions like:
+   - "What infrastructure does this repository manage?" (GCP projects, Kubernetes clusters, etc.)
+   - "Who primarily works in this repository?" (developers, SRE, mixed teams)
+   - "What's your deployment workflow?" (PR review, CI/CD, manual approval steps)
+   - "Are there special constraints or conventions for this repo?" (naming patterns, restricted operations)
+
+4. **Review the proposed changes**
+
+   Claude will draft customized sections and show them to you before making any changes. Review carefully.
+
+5. **Approve and commit**
+
+   Once you're satisfied with the customizations, let Claude make the changes, then commit:
+   ```bash
+   git add AGENTS.md
+   git commit -m "Customize AGENTS.md for [your-repo-name] infrastructure"
+   ```
+
+#### What Gets Customized
+
+The interactive setup will customize these sections of AGENTS.md:
+
+- **Project Overview** - Specific infrastructure instead of generic description
+- **Repository Structure** - Actual directories and their purposes
+- **Terraform Workflow** - Your team's specific PR and deployment process
+- **Design Decisions & Constraints** - Repo-specific safety rules
+- **Context Files for Infrastructure** - Actual infrastructure context
+
+#### Example Customization
+
+**Before (generic):**
+```markdown
+## Project Overview
+
+This repository contains **Claude Code safety hooks for terraform operations**...
+```
+
+**After (customized for your repo):**
+```markdown
+## Project Overview
+
+This repository manages **GCP infrastructure for the billing service**, including:
+
+- Production GKE clusters (us-central1, europe-west1)
+- CloudSQL databases for billing data aggregation
+- Cloud Storage buckets for raw billing exports
+- IAM bindings for service account access
+
+**Target Audience:** Data platform SRE team and billing engineers with moderate terraform experience.
+```
+
+#### Tips for Better Customization
+
+- **Be specific:** "GKE cluster in us-central1-prod" is better than "Kubernetes stuff"
+- **Mention dependencies:** "Depends on shared VPC from network-infrastructure repo"
+- **Note hazards:** "CloudSQL changes require maintenance window and DBA approval"
+- **Include links:** "See runbook: https://wiki.example.com/billing-etl-ops"
+- **Update regularly:** Re-run customization when infrastructure changes
+
+#### Skip If You Prefer Manual Editing
+
+This interactive approach is optional. You can also:
+- Manually edit AGENTS.md using the examples in this document
+- Copy a customized AGENTS.md from another similar repository
+- Start with the generic version and iterate over time
+
+The interactive approach just makes it faster and ensures you don't miss important context.
+
 ### Step 3: Commit to Repository
 
 ```bash
