@@ -1,4 +1,4 @@
-# Using Claude Code with Terraform - SRE Team Guide
+# Using Claude Code with Infrastructure Repos - SRE Team Guide
 
 ## Overview
 

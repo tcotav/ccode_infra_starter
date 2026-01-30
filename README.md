@@ -1,6 +1,6 @@
-# Claude Code Terraform Safety Hooks
+# Using Claude Code with Infrastructure Repos
 
-A production-ready pattern for safely using Claude Code with terraform in large infrastructure repositories.
+A production-ready pattern for safely using Claude Code with terraform and other infrastructure tools in large repositories.
 
 ## What This Does
 
