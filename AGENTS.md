@@ -216,3 +216,211 @@ This file (AGENTS.md) serves as an example of how to document projects for AI co
 - Use it for personal notes, shortcuts, environment-specific context
 - Never commit local files - they're for individual developers only
 - Allows team standards in the main file while preserving personal workflow
+
+## Interactive Setup Protocol (For Claude Code)
+
+When a user asks you to help customize AGENTS.md through interactive questions, follow this protocol:
+
+### Question Sequence
+
+Ask these questions one at a time, waiting for the user's response before proceeding:
+
+**1. Infrastructure Overview**
+```
+What infrastructure does this repository manage?
+
+Please describe:
+- Cloud provider(s) and services (GCP projects, AWS accounts, Kubernetes clusters, etc.)
+- Environments (production, staging, dev, sandbox)
+- Key resources or services this repo is responsible for
+
+Example answer: "This manages our production GKE clusters in GCP, including the API gateway
+service, user authentication service, and shared CloudSQL databases across 3 GCP projects."
+```
+
+**2. Team Composition**
+```
+Who primarily works in this repository?
+
+Choose the best fit:
+a) Experienced SRE team - Deep terraform and infrastructure expertise
+b) Mixed team - Some SREs, some developers with moderate infra knowledge
+c) Developer-focused - Engineers who work with infrastructure occasionally
+d) Other (please describe)
+
+This helps me adjust the tone and level of detail in the documentation.
+```
+
+**3. Deployment Workflow**
+```
+What's your deployment workflow for terraform changes?
+
+Please describe:
+- How changes are reviewed (PR process, required approvals)
+- How changes are applied (GitHub Actions, GitLab CI, ArgoCD, manual, other)
+- Any special approval requirements or change management processes
+
+Example: "PRs require 2 SRE approvals, then GitHub Actions runs terraform plan. After
+manual review of plan output, SRE team lead runs terraform apply during change window."
+```
+
+**4. Special Constraints**
+```
+Are there special constraints, conventions, or things people should know about this repo?
+
+Consider:
+- Naming conventions (resources, variables, modules)
+- Dependencies on other repositories or systems
+- Operations that are especially risky in this context
+- Required checks before making changes (cost estimation, security scans)
+- Links to runbooks or documentation
+
+Example: "All CloudSQL changes require DBA review. Resource names must follow pattern:
+{environment}-{service}-{resource-type}. Check infracost before adding expensive resources."
+```
+
+**5. Terraform Directory Structure** (if not obvious from question 1)
+```
+How is terraform code organized in this repository?
+
+Examples:
+- Single terraform directory at root
+- Multiple directories by service (service-a/terraform/, service-b/terraform/)
+- Separate directories by environment (prod/, staging/, dev/)
+- Modules separated from live code (modules/ and live/)
+
+This helps document where people should run terraform commands.
+```
+
+### Processing the Answers
+
+After collecting answers, create customized content for these AGENTS.md sections:
+
+**Sections to Customize:**
+
+1. **Project Overview**
+   - Replace generic description with specific infrastructure from question 1
+   - Mention environments and key services
+   - Adjust "Target Audience" based on question 2
+   - Add cloud provider and tools being used
+
+2. **Repository Structure**
+   - Document actual terraform directory layout from question 5
+   - Note what each directory/subdirectory manages
+   - Update the structure diagram to match reality
+
+3. **Design Decisions & Constraints**
+   - Keep the "Safety First" section (universal)
+   - Add a "Repository-Specific Constraints" subsection with details from question 4
+   - Include naming conventions, dependencies, special approval requirements
+
+4. **Terraform Workflow**
+   - Customize the "Deployment Workflow" section based on question 3
+   - Replace generic PR workflow with their specific process
+   - Update CI/CD references to match their actual system
+   - Add any required approval steps or checks
+
+5. **Context Files for Infrastructure** (new section if it doesn't exist)
+   - Add actual infrastructure context based on question 1
+   - Include environment details
+   - Note critical resources and their purposes
+   - Add links to runbooks or documentation from question 4
+
+### Presenting the Draft
+
+After processing answers, present changes like this:
+
+```
+Based on your answers, here are the sections I'll customize in AGENTS.md:
+
+## 1. Project Overview
+[Show the full customized Project Overview section]
+
+## 2. Repository Structure
+[Show the customized structure section]
+
+## 3. Repository-Specific Constraints
+[Show new constraints based on their input]
+
+## 4. Terraform Workflow - Deployment Workflow
+[Show customized deployment workflow]
+
+## 5. Infrastructure Context
+[Show the new context section]
+
+---
+
+Would you like me to:
+a) Make these changes to AGENTS.md now
+b) Revise any of these sections (let me know which ones)
+c) Ask more questions to gather additional context
+```
+
+### Making the Changes
+
+When user approves:
+
+1. **Read the current AGENTS.md** to understand existing structure
+2. **Use Edit tool** to replace/update specific sections
+3. **Preserve** sections that shouldn't change:
+   - Core Philosophy: LLM as Intern
+   - Documentation Standards
+   - Don't Do These Things
+   - Testing Requirements
+   - Key Files to Understand (hook details)
+4. **Keep formatting consistent** with existing markdown style
+5. **After editing**, confirm what was changed and offer cleanup:
+   ```
+   I've customized AGENTS.md with your infrastructure details.
+
+   Changes made:
+   - Updated Project Overview with GCP/GKE infrastructure details
+   - Added Repository-Specific Constraints section
+   - Customized Terraform Workflow with your GitHub Actions process
+   - Added Infrastructure Context section
+
+   Would you like me to remove the "Interactive Setup Protocol" section from AGENTS.md?
+   It's no longer needed now that customization is complete, and you can always refer
+   back to the template repository if you need to re-customize later.
+
+   Next steps:
+   1. Review the changes: git diff AGENTS.md
+   2. Test the hooks: ./claude/docs/test-hooks.sh
+   3. Commit: git add AGENTS.md && git commit -m "Customize AGENTS.md for [repo]"
+   ```
+
+6. **If user wants to remove the protocol section**, replace it with a brief reference:
+   ```markdown
+   ## About This File
+
+   This AGENTS.md was customized for our infrastructure using the interactive setup process.
+
+   To re-customize or update this file if infrastructure changes significantly, see the
+   template repository or simply ask Claude Code: "Help me update AGENTS.md with our
+   current infrastructure details"
+   ```
+
+### Important Guidelines
+
+- **One question at a time** - Don't overwhelm with multiple questions
+- **Use their language** - If they say "K8s" instead of "Kubernetes", match that
+- **Be specific in drafts** - Show actual section content, not placeholders
+- **Preserve safety** - Never weaken the safety constraints in customization
+- **No emojis** - Keep professional tone throughout
+- **Validate understanding** - If an answer is unclear, ask for clarification before proceeding
+
+### If User Wants to Skip Questions
+
+If user says "I just want to customize it manually" or "skip the questions":
+
+```
+No problem. You can manually edit AGENTS.md directly. The key sections to customize are:
+
+1. Project Overview - Replace generic description with your infrastructure
+2. Repository Structure - Update paths to match your layout
+3. Terraform Workflow - Add your actual PR/CI/CD process
+4. Add a "Repository-Specific Constraints" section with your conventions
+
+See the examples in the DEPLOYMENT.md "Repository Structures and Context Files"
+section for templates you can adapt.
+```
