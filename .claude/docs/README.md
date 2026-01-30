@@ -499,6 +499,42 @@ These hooks are for **local development only**. Your CI/CD pipeline:
 
 ---
 
+## Frequently Asked Questions
+
+### Why not use MCP servers instead of hooks?
+
+Hooks are simpler for this use case:
+
+- No additional infrastructure needed
+- Works immediately in any repo
+- Team can read/audit Python scripts
+- Enforced at system level, not by Claude's memory
+
+MCP servers are great for Phase 2 enhancements (read-only GCP inspection, etc.), but hooks provide the core safety layer.
+
+### Should hooks be different per environment?
+
+Yes, eventually:
+
+- Start with same rules everywhere (safest default)
+- After teams gain confidence, allow customization
+- Example: Dev repos might allow terraform apply with extra confirmation
+- Documented in [DEPLOYMENT.md](./DEPLOYMENT.md#customization-per-repository)
+
+**Best practice:** Use strict rules initially, then customize based on actual team needs and feedback.
+
+### Can I use these hooks with other tools (kubectl, helm, etc.)?
+
+Yes. The terraform-validator.py pattern can be copied for other dangerous commands:
+
+1. Copy the pattern from terraform-validator.py
+2. Create kubectl-validator.py, helm-validator.py, etc.
+3. Add to .claude/settings.json
+
+The same safety principles apply to any infrastructure tool.
+
+---
+
 ## Support and Feedback
 
 **Questions?** Ask in #sre-platform Slack channel

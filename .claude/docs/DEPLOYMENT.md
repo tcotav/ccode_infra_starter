@@ -771,6 +771,16 @@ Edit `.claude/settings.json` and remove the hooks section temporarily.
 
 ---
 
+## Success Criteria
+
+This project succeeds when:
+
+1. SRE teams feel confident using Claude Code with terraform
+2. Zero incidents of accidental terraform applies via Claude
+3. Teams customize hooks for their needs without breaking safety
+4. The documentation answers questions before they're asked
+5. Other teams copy this pattern for kubectl, helm, etc.
+
 ## Success Metrics
 
 Track these to measure adoption and effectiveness:
