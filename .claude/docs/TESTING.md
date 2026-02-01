@@ -1,6 +1,6 @@
-# Testing the Terraform Hooks
+# Testing the Hooks
 
-This guide walks through testing the Claude Code terraform hooks to verify they're working correctly.
+This guide walks through testing the Claude Code terraform and helm hooks to verify they're working correctly.
 
 ## Prerequisites
 
@@ -331,75 +331,29 @@ ls -ld .claude/audit
 
 ---
 
-## Automated Test Script
+## Automated Test Suite
 
-For comprehensive testing, you can run this bash script:
-
-```bash
-#!/bin/bash
-# test-hooks.sh - Automated hook testing
-
-set -e
-
-echo "=== Testing Terraform Hooks ==="
-
-# Test 1: Validator blocks terraform apply
-echo "Test 1: Blocking terraform apply..."
-RESULT=$(echo '{"tool_name":"Bash","tool_input":{"command":"terraform apply"},"cwd":"'$(pwd)'"}' | \
-  python3 .claude/hooks/terraform-validator.py)
-if echo "$RESULT" | jq -e '.hookSpecificOutput.permissionDecision == "deny"' > /dev/null; then
-  echo "PASS: terraform apply blocked"
-else
-  echo "FAIL: terraform apply not blocked"
-  exit 1
-fi
-
-# Test 2: Validator prompts for terraform plan
-echo "Test 2: Prompting for terraform plan..."
-RESULT=$(echo '{"tool_name":"Bash","tool_input":{"command":"terraform plan -lock=false"},"cwd":"'$(pwd)'"}' | \
-  python3 .claude/hooks/terraform-validator.py)
-if echo "$RESULT" | jq -e '.hookSpecificOutput.permissionDecision == "ask"' > /dev/null; then
-  echo "PASS: terraform plan prompts for approval"
-else
-  echo "FAIL: terraform plan doesn't prompt"
-  exit 1
-fi
-
-# Test 3: Validator allows non-terraform commands
-echo "Test 3: Allowing non-terraform commands..."
-RESULT=$(echo '{"tool_name":"Bash","tool_input":{"command":"ls -la"},"cwd":"'$(pwd)'"}' | \
-  python3 .claude/hooks/terraform-validator.py)
-if echo "$RESULT" | jq -e '.hookSpecificOutput.permissionDecision == "allow"' > /dev/null; then
-  echo "PASS: Non-terraform commands allowed"
-else
-  echo "FAIL: Non-terraform commands blocked"
-  exit 1
-fi
-
-# Test 4: Logger creates audit entries
-echo "Test 4: Testing audit logging..."
-rm -f .claude/audit/terraform.log
-echo '{"tool_name":"Bash","tool_input":{"command":"terraform validate"},"tool_response":{"success":true,"exit_code":0,"content":"ok"},"cwd":"'$(pwd)'"}' | \
-  python3 .claude/hooks/terraform-logger.py
-
-if [ -f .claude/audit/terraform.log ]; then
-  echo "PASS: Audit log created"
-  cat .claude/audit/terraform.log | jq .
-else
-  echo "FAIL: Audit log not created"
-  exit 1
-fi
-
-echo ""
-echo "=== All Tests Passed ==="
-```
-
-Save as `.claude/docs/test-hooks.sh`, make executable, and run:
+The repository includes pytest tests that cover both terraform and helm validators:
 
 ```bash
-chmod +x .claude/docs/test-hooks.sh
-./.claude/docs/test-hooks.sh
+pytest .claude/hooks/ -v
 ```
+
+This runs tests for both `terraform-validator.py` and `helm-validator.py`, covering:
+
+- Blocked commands (bare, with global flags, with aliases, piped/chained)
+- Prompted commands (safe operations that require approval)
+- Non-matching commands (unrelated commands pass through)
+- Suspicious keyword detection (indirection via variables or eval)
+- False positive resistance (blocked keywords in non-subcommand positions)
+- Case insensitivity
+
+Test files:
+
+- `.claude/hooks/test_terraform_validator.py`
+- `.claude/hooks/test_helm_validator.py`
+
+Run these tests before committing any changes to the hook scripts.
 
 ---
 
@@ -407,9 +361,10 @@ chmod +x .claude/docs/test-hooks.sh
 
 Before considering the hooks "production ready":
 
-- [ ] All blocked commands are actually blocked
+- [ ] Automated tests pass: `pytest .claude/hooks/ -v`
+- [ ] All blocked commands are actually blocked (terraform and helm)
 - [ ] Safe commands prompt for approval
-- [ ] Non-terraform commands pass through
+- [ ] Non-terraform/helm commands pass through
 - [ ] Audit log captures all attempts
 - [ ] Audit log includes timestamps and working directory
 - [ ] Hooks work in different directories of the repo
