@@ -42,15 +42,21 @@ AUDIT_LOG = get_audit_log_path()
 # hooks anyway. This catches the actual helm binary and wrapper scripts in PATH.
 HELM_COMMAND = r"\bhelm\b"
 
+# Helm global flags may have space-separated values (e.g., --namespace prod),
+# so we skip arbitrary whitespace-delimited tokens between the command name and
+# subcommand using a non-greedy match. \b(?!=) prevents false positives when the
+# subcommand word appears as part of a key=value pair (e.g., --set phase=install).
+HELM_FLAGS_GAP = r"\s+(?:\S+\s+)*?"
+
 # Commands that are absolutely forbidden - these deploy to or mutate a cluster
 # and must go through GitOps (ArgoCD, Flux) or PR-driven CI/CD
 BLOCKED_COMMANDS = [
-    (rf"{HELM_COMMAND}\s+install\b", "helm install"),
-    (rf"{HELM_COMMAND}\s+upgrade\b", "helm upgrade"),
-    (rf"{HELM_COMMAND}\s+uninstall\b", "helm uninstall"),
-    (rf"{HELM_COMMAND}\s+delete\b", "helm delete"),
-    (rf"{HELM_COMMAND}\s+rollback\b", "helm rollback"),
-    (rf"{HELM_COMMAND}\s+test\b", "helm test"),
+    (rf"{HELM_COMMAND}{HELM_FLAGS_GAP}install\b(?!=)", "helm install"),
+    (rf"{HELM_COMMAND}{HELM_FLAGS_GAP}upgrade\b(?!=)", "helm upgrade"),
+    (rf"{HELM_COMMAND}{HELM_FLAGS_GAP}uninstall\b(?!=)", "helm uninstall"),
+    (rf"{HELM_COMMAND}{HELM_FLAGS_GAP}delete\b(?!=)", "helm delete"),
+    (rf"{HELM_COMMAND}{HELM_FLAGS_GAP}rollback\b(?!=)", "helm rollback"),
+    (rf"{HELM_COMMAND}{HELM_FLAGS_GAP}test\b(?!=)", "helm test"),
 ]
 
 # Pattern to identify any helm command

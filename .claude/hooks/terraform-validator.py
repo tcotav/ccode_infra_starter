@@ -44,15 +44,20 @@ AUDIT_LOG = get_audit_log_path()
 # Add your custom wrapper scripts here if needed (e.g., tfm, tfwrapper, etc.)
 TF_COMMAND = r"\b(terraform|tf|tform)\b"
 
+# Terraform global flags use = syntax for values (e.g., -chdir=DIR),
+# so any -prefixed token is self-contained (no space-separated values to skip).
+# This gap pattern allows matching commands like: terraform -chdir=../prod apply
+TF_FLAGS_GAP = r"(?:\s+-\S+)*"
+
 # Commands that are absolutely forbidden
 BLOCKED_COMMANDS = [
-    (rf"{TF_COMMAND}\s+apply\b", "terraform apply"),
-    (rf"{TF_COMMAND}\s+destroy\b", "terraform destroy"),
-    (rf"{TF_COMMAND}\s+import\b", "terraform import"),
-    (rf"{TF_COMMAND}\s+state\s+(rm|mv|push|pull)\b", "terraform state manipulation (rm/mv/push/pull)"),
-    (rf"{TF_COMMAND}\s+taint\b", "terraform taint"),
-    (rf"{TF_COMMAND}\s+untaint\b", "terraform untaint"),
-    (rf"{TF_COMMAND}\s+force-unlock\b", "terraform force-unlock"),
+    (rf"{TF_COMMAND}{TF_FLAGS_GAP}\s+apply\b", "terraform apply"),
+    (rf"{TF_COMMAND}{TF_FLAGS_GAP}\s+destroy\b", "terraform destroy"),
+    (rf"{TF_COMMAND}{TF_FLAGS_GAP}\s+import\b", "terraform import"),
+    (rf"{TF_COMMAND}{TF_FLAGS_GAP}\s+state\s+(rm|mv|push|pull)\b", "terraform state manipulation (rm/mv/push/pull)"),
+    (rf"{TF_COMMAND}{TF_FLAGS_GAP}\s+taint\b", "terraform taint"),
+    (rf"{TF_COMMAND}{TF_FLAGS_GAP}\s+untaint\b", "terraform untaint"),
+    (rf"{TF_COMMAND}{TF_FLAGS_GAP}\s+force-unlock\b", "terraform force-unlock"),
 ]
 
 # All other terraform commands require user approval
