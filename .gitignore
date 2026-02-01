@@ -12,3 +12,9 @@ CLAUDE.local.md
 
 # Python bytecode cache
 __pycache__/
+
+# Virtual environment
+.venv/
+
+# Pytest cache
+.pytest_cache/
