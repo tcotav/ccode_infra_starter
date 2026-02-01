@@ -130,14 +130,33 @@ def check_command(command, cwd):
             log_command(command, "BLOCKED", cwd, f"Blocked: {name}")
             return ("deny", reason, True)
 
-    # All other helm commands require approval
-    reason = (
-        f"Helm command requires approval:\n\n"
-        f"  Command: {command}\n"
-        f"  Working directory: {cwd}\n\n"
-        f"This prompt ensures you review each helm operation before execution."
-    )
-    log_command(command, "PENDING_APPROVAL", cwd, "Awaiting user approval")
+    # Check if the command contains blocked subcommand keywords despite not
+    # matching the structured block patterns. This catches indirect execution
+    # via variables or eval (e.g., subcmd="install"; helm $subcmd).
+    suspicious = [kw for kw in ("install", "upgrade", "uninstall", "delete", "rollback")
+                  if re.search(rf"\b{kw}\b", command, re.IGNORECASE)]
+
+    if suspicious:
+        keywords = ", ".join(suspicious)
+        reason = (
+            f"WARNING: Command references blocked operation ({keywords}) but in a form\n"
+            f"that could not be automatically verified.\n\n"
+            f"  Command: {command}\n"
+            f"  Working directory: {cwd}\n\n"
+            f"This may be using variables, eval, or other indirection to run a\n"
+            f"blocked operation. Review the full command carefully before approving."
+        )
+        log_command(command, "PENDING_APPROVAL_SUSPICIOUS", cwd,
+                    f"Contains blocked keywords: {keywords}")
+    else:
+        reason = (
+            f"Helm command requires approval:\n\n"
+            f"  Command: {command}\n"
+            f"  Working directory: {cwd}\n\n"
+            f"This prompt ensures you review each helm operation before execution."
+        )
+        log_command(command, "PENDING_APPROVAL", cwd, "Awaiting user approval")
+
     return ("ask", reason, False)
 
 
