@@ -274,7 +274,7 @@ Primary documentation for end users (SRE teams). Covers:
 
 Before committing changes to hooks:
 
-1. Run automated test suite: `.claude/docs/test-hooks.sh`
+1. Run automated test suite: `pytest .claude/hooks/`
 2. Test manually with Claude Code in this repo
 3. Verify audit log entries are created correctly
 4. Test with common terraform aliases (tf, tform)
