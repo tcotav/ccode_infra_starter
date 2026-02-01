@@ -66,11 +66,13 @@ AGENTS.local.md                # Personal preferences (gitignored, optional)
 
 ### Alias Handling
 
-- Hardcoded list of common terraform command names: `terraform`, `tf`, `tform`
+- Hardcoded list of common command names per tool:
+  - Terraform: `terraform`, `tf`, `tform`
+  - Helm: `helm`
 - Shell aliases don't work in subprocess calls, so they can't bypass hooks anyway
 - The list catches wrapper **scripts** in PATH, not shell aliases
 - Design decision: Simple hardcoded list > complex dynamic detection
-- Teams can easily add custom wrappers to the regex pattern if needed
+- Teams can easily add custom wrappers to the regex pattern in each validator
 
 ### Project-Level Configuration
 
