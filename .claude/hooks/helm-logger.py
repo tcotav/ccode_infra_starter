@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 """
-Terraform Command Result Logger for Claude Code
-================================================
-Post-execution hook that logs terraform command results after they complete.
+Helm Command Result Logger for Claude Code
+============================================
+Post-execution hook that logs helm command results after they complete.
 
 Behavior:
 - Logs command completion status (success/failure)
 - Records exit codes
-- Captures execution time
-- Appends to .claude/audit/terraform.log
+- Appends to .claude/audit/helm.log
 
 Usage:
   This script is automatically invoked by Claude Code hooks.
@@ -24,17 +23,18 @@ import re
 from datetime import datetime
 from pathlib import Path
 
+
 # Audit log location (project-specific, rotated daily)
 def get_audit_log_path():
     """Get dated audit log path for automatic daily rotation."""
     date_str = datetime.now().strftime("%Y-%m-%d")
     audit_dir = Path(os.environ.get("CLAUDE_PROJECT_DIR", ".")) / ".claude" / "audit"
-    return audit_dir / f"terraform-{date_str}.log"
+    return audit_dir / f"helm-{date_str}.log"
 
 AUDIT_LOG = get_audit_log_path()
 
-# Common terraform aliases (matches: terraform, tf, tform)
-TERRAFORM_PATTERN = r"\b(terraform|tf|tform)\b"
+# Helm command pattern
+HELM_PATTERN = r"\bhelm\b"
 
 
 def ensure_audit_log_exists():
@@ -44,10 +44,10 @@ def ensure_audit_log_exists():
 
 def log_result(command, cwd, success, exit_code):
     """
-    Log terraform command result to audit file.
+    Log helm command result to audit file.
 
     Args:
-        command: The terraform command that was executed
+        command: The helm command that was executed
         cwd: Current working directory
         success: Whether command succeeded (boolean)
         exit_code: Command exit code
@@ -89,8 +89,8 @@ def main():
 
     command = tool_input.get("command", "")
 
-    # Only log terraform commands executed via Bash tool
-    if tool_name != "Bash" or not re.search(TERRAFORM_PATTERN, command, re.IGNORECASE):
+    # Only log helm commands executed via Bash tool
+    if tool_name != "Bash" or not re.search(HELM_PATTERN, command, re.IGNORECASE):
         sys.exit(0)
 
     # Extract execution results

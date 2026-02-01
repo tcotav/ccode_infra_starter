@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 """
-Terraform Command Validator for Claude Code
-============================================
-Pre-execution hook that validates terraform commands before Claude runs them.
+Helm Command Validator for Claude Code
+=======================================
+Pre-execution hook that validates helm commands before Claude runs them.
+
+Scoped to Helm chart development workflows. Encourages local validation
+(lint, template) while blocking commands that deploy to clusters.
 
 Behavior:
-- BLOCKS: terraform apply, destroy, import, and state manipulation commands
-- PROMPTS: All other terraform commands (plan, init, fmt, validate, etc.)
-- LOGS: All terraform command attempts to .claude/audit/terraform.log
+- BLOCKS: helm install, upgrade, uninstall, rollback, test (cluster mutations)
+- PROMPTS: helm template, lint, show, dependency, package, etc. (local dev)
+- LOGS: All helm command attempts to .claude/audit/helm.log
 
 Usage:
   This script is automatically invoked by Claude Code hooks.
@@ -23,45 +26,41 @@ import os
 from datetime import datetime
 from pathlib import Path
 
+
 # Audit log location (project-specific, rotated daily)
 def get_audit_log_path():
     """Get dated audit log path for automatic daily rotation."""
     date_str = datetime.now().strftime("%Y-%m-%d")
     audit_dir = Path(os.environ.get("CLAUDE_PROJECT_DIR", ".")) / ".claude" / "audit"
-    return audit_dir / f"terraform-{date_str}.log"
+    return audit_dir / f"helm-{date_str}.log"
 
 AUDIT_LOG = get_audit_log_path()
 
-# Terraform command names to catch
+# Helm command name to catch
 #
-# NOTE: Shell aliases (like `alias tf=terraform`) don't work in subprocess calls,
-# so they won't bypass these hooks anyway. This list is for:
-# - The actual terraform binary
-# - Wrapper SCRIPTS in $PATH (e.g., ~/bin/tf)
-# - Common shorthand commands your team uses
-#
-# Default list covers: terraform, tf, tform
-# Add your custom wrapper scripts here if needed (e.g., tfm, tfwrapper, etc.)
-TF_COMMAND = r"\b(terraform|tf|tform)\b"
+# NOTE: Shell aliases don't work in subprocess calls, so they can't bypass
+# hooks anyway. This catches the actual helm binary and wrapper scripts in PATH.
+HELM_COMMAND = r"\bhelm\b"
 
-# Terraform global flags use = syntax for values (e.g., -chdir=DIR),
-# so any -prefixed token is self-contained (no space-separated values to skip).
-# This gap pattern allows matching commands like: terraform -chdir=../prod apply
-TF_FLAGS_GAP = r"(?:\s+-\S+)*"
+# Helm global flags may have space-separated values (e.g., --namespace prod),
+# so we skip arbitrary whitespace-delimited tokens between the command name and
+# subcommand using a non-greedy match. \b(?!=) prevents false positives when the
+# subcommand word appears as part of a key=value pair (e.g., --set phase=install).
+HELM_FLAGS_GAP = r"\s+(?:\S+\s+)*?"
 
-# Commands that are absolutely forbidden
+# Commands that are absolutely forbidden - these deploy to or mutate a cluster
+# and must go through GitOps (ArgoCD, Flux) or PR-driven CI/CD
 BLOCKED_COMMANDS = [
-    (rf"{TF_COMMAND}{TF_FLAGS_GAP}\s+apply\b", "terraform apply"),
-    (rf"{TF_COMMAND}{TF_FLAGS_GAP}\s+destroy\b", "terraform destroy"),
-    (rf"{TF_COMMAND}{TF_FLAGS_GAP}\s+import\b", "terraform import"),
-    (rf"{TF_COMMAND}{TF_FLAGS_GAP}\s+state\s+(rm|mv|push|pull)\b", "terraform state manipulation (rm/mv/push/pull)"),
-    (rf"{TF_COMMAND}{TF_FLAGS_GAP}\s+taint\b", "terraform taint"),
-    (rf"{TF_COMMAND}{TF_FLAGS_GAP}\s+untaint\b", "terraform untaint"),
-    (rf"{TF_COMMAND}{TF_FLAGS_GAP}\s+force-unlock\b", "terraform force-unlock"),
+    (rf"{HELM_COMMAND}{HELM_FLAGS_GAP}install\b(?!=)", "helm install"),
+    (rf"{HELM_COMMAND}{HELM_FLAGS_GAP}upgrade\b(?!=)", "helm upgrade"),
+    (rf"{HELM_COMMAND}{HELM_FLAGS_GAP}uninstall\b(?!=)", "helm uninstall"),
+    (rf"{HELM_COMMAND}{HELM_FLAGS_GAP}delete\b(?!=)", "helm delete"),
+    (rf"{HELM_COMMAND}{HELM_FLAGS_GAP}rollback\b(?!=)", "helm rollback"),
+    (rf"{HELM_COMMAND}{HELM_FLAGS_GAP}test\b(?!=)", "helm test"),
 ]
 
-# All other terraform commands require user approval
-TERRAFORM_PATTERN = TF_COMMAND
+# Pattern to identify any helm command
+HELM_PATTERN = HELM_COMMAND
 
 
 def ensure_audit_log_exists():
@@ -71,10 +70,10 @@ def ensure_audit_log_exists():
 
 def log_command(command, decision, cwd, reason=""):
     """
-    Log terraform command attempt to audit file with timestamp.
+    Log helm command attempt to audit file with timestamp.
 
     Args:
-        command: The terraform command that was attempted
+        command: The helm command that was attempted
         decision: BLOCKED, PENDING_APPROVAL, APPROVED, or DENIED
         cwd: Current working directory
         reason: Human-readable reason for the decision
@@ -99,7 +98,7 @@ def log_command(command, decision, cwd, reason=""):
 
 def check_command(command, cwd):
     """
-    Validate terraform command and determine if it should be blocked or prompted.
+    Validate helm command and determine if it should be blocked or prompted.
 
     Args:
         command: The bash command to validate
@@ -112,8 +111,8 @@ def check_command(command, cwd):
             should_block: If True, command is completely blocked
     """
 
-    # Check if this is a terraform command at all
-    if not re.search(TERRAFORM_PATTERN, command, re.IGNORECASE):
+    # Check if this is a helm command at all
+    if not re.search(HELM_PATTERN, command, re.IGNORECASE):
         return ("allow", "", False)
 
     # Check blocked patterns first
@@ -121,8 +120,11 @@ def check_command(command, cwd):
         if re.search(pattern, command, re.IGNORECASE):
             reason = (
                 f"BLOCKED: {name} is not allowed.\n\n"
-                f"This command can modify infrastructure state and must go through "
-                f"your standard PR review workflow.\n\n"
+                f"This command deploys to or mutates a cluster and must go through "
+                f"your GitOps workflow (ArgoCD, Flux, or PR-driven CI/CD).\n\n"
+                f"For local development, use:\n"
+                f"  helm template <chart>    # Render templates locally\n"
+                f"  helm lint <chart>        # Validate chart structure\n\n"
                 f"Working directory: {cwd}"
             )
             log_command(command, "BLOCKED", cwd, f"Blocked: {name}")
@@ -130,8 +132,8 @@ def check_command(command, cwd):
 
     # Check if the command contains blocked subcommand keywords despite not
     # matching the structured block patterns. This catches indirect execution
-    # via variables or eval (e.g., subcmd="apply"; terraform $subcmd).
-    suspicious = [kw for kw in ("apply", "destroy", "taint", "untaint", "force-unlock")
+    # via variables or eval (e.g., subcmd="install"; helm $subcmd).
+    suspicious = [kw for kw in ("install", "upgrade", "uninstall", "delete", "rollback")
                   if re.search(rf"\b{kw}\b", command, re.IGNORECASE)]
 
     if suspicious:
@@ -148,10 +150,10 @@ def check_command(command, cwd):
                     f"Contains blocked keywords: {keywords}")
     else:
         reason = (
-            f"Terraform command requires approval:\n\n"
+            f"Helm command requires approval:\n\n"
             f"  Command: {command}\n"
             f"  Working directory: {cwd}\n\n"
-            f"This prompt ensures you review each terraform operation before execution."
+            f"This prompt ensures you review each helm operation before execution."
         )
         log_command(command, "PENDING_APPROVAL", cwd, "Awaiting user approval")
 

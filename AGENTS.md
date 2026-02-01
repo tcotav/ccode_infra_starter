@@ -2,16 +2,16 @@
 
 ## Project Overview
 
-This repository contains **Claude Code safety hooks for terraform operations**, designed for SRE teams managing infrastructure with terraform in large monorepos.
+This repository contains **Claude Code safety hooks for terraform and Helm operations**, designed for SRE teams managing infrastructure and Kubernetes deployments in large monorepos.
 
-**Purpose:** Provide a standard, safe pattern for using Claude Code with terraform that:
+**Purpose:** Provide a standard, safe pattern for using Claude Code with terraform and Helm that:
 
-- Blocks dangerous operations (apply, destroy, state manipulation)
-- Requires explicit approval for all terraform commands
+- Blocks dangerous operations (terraform apply/destroy, helm install/upgrade/uninstall)
+- Requires explicit approval for all terraform and helm commands
 - Maintains audit trails of all operations
-- Preserves existing change management processes (PR review, etc.)
+- Preserves existing change management processes (PR review, GitOps, etc.)
 
-**Target Audience:** SRE teams at organizations using terraform, GCP, Kubernetes/ArgoCD in shared environments.
+**Target Audience:** SRE teams at organizations using terraform, Helm charts, GCP, Kubernetes/ArgoCD in shared environments.
 
 **File Naming:** This file is named AGENTS.md for tool-agnostic compatibility. CLAUDE.md is a symlink for backwards compatibility.
 
@@ -27,8 +27,10 @@ You review and approve each action, you are responsible for the work product, yo
 .claude/
 ├── settings.json              # Hook configuration (committed)
 ├── hooks/
-│   ├── terraform-validator.py # Pre-execution validation (blocks/prompts)
-│   └── terraform-logger.py    # Post-execution logging
+│   ├── terraform-validator.py # Pre-execution validation for terraform
+│   ├── terraform-logger.py    # Post-execution logging for terraform
+│   ├── helm-validator.py      # Pre-execution validation for helm
+│   └── helm-logger.py         # Post-execution logging for helm
 ├── docs/
 │   ├── README.md              # Main usage guide for SRE teams
 │   ├── TESTING.md             # Testing procedures
@@ -47,10 +49,12 @@ AGENTS.local.md                # Personal preferences (gitignored, optional)
 ### Safety First
 
 - **Never suggest or run `terraform apply`** - This must always go through PR workflow
+- **Never suggest or run `helm install`, `helm upgrade`, or `helm uninstall`** - Deployments go through GitOps or PR-driven CI/CD
 - Hooks are technically enforced at system level, not by Claude's behavior
-- All terraform commands require explicit user approval (prompts)
+- All terraform and helm commands require explicit user approval (prompts)
 - Audit logging is mandatory and comprehensive
-- Local workflow: `terraform init -no-color` and `terraform plan -lock=false -no-color` for validation only
+- Local terraform workflow: `terraform init -no-color` and `terraform plan -lock=false -no-color` for validation only
+- Local Helm workflow: `helm lint` and `helm template` for chart validation only
 
 ### Documentation Standards
 
@@ -62,11 +66,13 @@ AGENTS.local.md                # Personal preferences (gitignored, optional)
 
 ### Alias Handling
 
-- Hardcoded list of common terraform command names: `terraform`, `tf`, `tform`
+- Hardcoded list of common command names per tool:
+  - Terraform: `terraform`, `tf`, `tform`
+  - Helm: `helm`
 - Shell aliases don't work in subprocess calls, so they can't bypass hooks anyway
 - The list catches wrapper **scripts** in PATH, not shell aliases
 - Design decision: Simple hardcoded list > complex dynamic detection
-- Teams can easily add custom wrappers to the regex pattern if needed
+- Teams can easily add custom wrappers to the regex pattern in each validator
 
 ### Project-Level Configuration
 
@@ -78,6 +84,7 @@ AGENTS.local.md                # Personal preferences (gitignored, optional)
 ### Don't Do These Things
 
 - **Never run `terraform apply`** (even in examples - always show it being blocked)
+- **Never run `helm install`, `helm upgrade`, or `helm uninstall`** (even in examples - always show it being blocked)
 - **Don't add emojis** to any documentation
 - **Don't make the hooks less strict** without discussing tradeoffs
 - **Don't create new files unnecessarily** - prefer editing existing docs
@@ -149,6 +156,74 @@ terraform plan -lock=false -no-color
 - Creates a natural checkpoint before moving to PR stage
 - Validation only runs `terraform plan` - actual deployment happens via PR + CICD
 
+## Helm Chart Development Workflow
+
+### Local Validation Workflow
+
+**Allowed commands for local chart development:**
+
+```bash
+cd <chart-directory>
+helm lint .                                 # Validate chart structure and templates
+helm template <release-name> .              # Render templates locally without a cluster
+helm template <release-name> . -f values-prod.yaml  # Render with specific values file
+helm show values <chart>                    # Inspect default values of a chart
+helm dependency update .                    # Update chart dependencies locally
+```
+
+**Important:**
+- `helm lint` catches structural errors, missing required values, and template issues
+- `helm template` renders the full manifest output so you can review what would be deployed
+- Always validate with environment-specific values files (e.g., `values-prod.yaml`) to catch misconfigurations before PR
+- These commands do not require cluster access and are safe to run locally
+
+### Deployment Workflow
+
+**All Helm deployments must go through GitOps or PR-driven CI/CD:**
+
+1. Make your chart changes locally (templates, values, Chart.yaml)
+2. Run `helm lint` and `helm template` to validate
+3. Commit changes and create a GitHub PR
+4. Deployment happens via ArgoCD, Flux, or your CI/CD pipeline
+
+**Never run `helm install`, `helm upgrade`, or `helm uninstall` locally** - Deployments must go through the GitOps workflow to maintain audit trails, team review, and consistent rollout.
+
+### Making Helm Chart Changes with Claude Code
+
+When modifying Helm charts, follow this lifecycle pattern:
+
+**1. Make the Changes**
+- Edit templates, values files, or Chart.yaml as requested
+- Follow existing chart conventions and Helm best practices
+- Use named templates (`_helpers.tpl`) for reusable logic
+
+**2. Ask User to Verify**
+After making changes, always ask the user:
+
+> "Would you like me to validate these Helm chart changes? (This will run `helm lint` and `helm template` only - nothing will be deployed)"
+
+**3. Run Validation (if user approves)**
+
+```bash
+cd <chart-directory>
+helm lint .
+helm template <release-name> . -f <values-file>
+```
+
+**4. Validate and Comment**
+- Review the lint output for warnings or errors
+- Review the rendered templates for correctness
+- Note resource names, labels, and selectors
+- Check that environment-specific values are handled correctly
+- If there are errors, explain them and suggest fixes
+
+**Why this pattern:**
+- Catches template rendering errors before committing
+- Validates that values files produce the expected manifests
+- Gives users control over when validation runs
+- Creates a checkpoint before the PR stage
+- No cluster access needed for local validation
+
 ## Key Files to Understand
 
 ### [.claude/hooks/terraform-validator.py](./.claude/hooks/terraform-validator.py)
@@ -164,11 +239,24 @@ The pre-execution hook that:
 - `BLOCKED_COMMANDS`: List of forbidden operations
 - `TERRAFORM_PATTERN`: Used to identify any terraform command
 
+### [.claude/hooks/helm-validator.py](./.claude/hooks/helm-validator.py)
+
+The pre-execution hook for Helm commands that:
+- Checks if command matches helm patterns
+- Blocks cluster-mutating commands (install, upgrade, uninstall, rollback, test, delete)
+- Prompts for approval on safe commands (template, lint, show, dependency, package)
+- Logs all attempts to audit file
+
+**Key variables:**
+- `HELM_COMMAND`: Regex pattern for the helm binary
+- `BLOCKED_COMMANDS`: List of forbidden operations
+- `HELM_PATTERN`: Used to identify any helm command
+
 ### [.claude/settings.json](./.claude/settings.json)
 
 Configures which hooks run and when:
-- `PreToolUse`: Runs before command execution
-- `PostToolUse`: Runs after command completes
+- `PreToolUse`: Runs before command execution (terraform-validator.py, helm-validator.py)
+- `PostToolUse`: Runs after command completes (terraform-logger.py, helm-logger.py)
 
 Uses `$CLAUDE_PROJECT_DIR` environment variable to locate hooks.
 
@@ -191,6 +279,8 @@ Before committing changes to hooks:
 3. Verify audit log entries are created correctly
 4. Test with common terraform aliases (tf, tform)
 5. Confirm blocked commands are actually blocked
+6. For Helm hooks: verify `helm install`/`upgrade`/`uninstall` are blocked
+7. For Helm hooks: verify `helm lint`/`helm template` prompt for approval
 
 See [TESTING.md](./.claude/docs/TESTING.md) for detailed testing procedures.
 

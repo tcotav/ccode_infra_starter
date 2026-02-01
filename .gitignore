@@ -9,3 +9,6 @@ AGENTS.local.md
 **/AGENTS.local.md
 CLAUDE.local.md
 **/CLAUDE.local.md
+
+# Python bytecode cache
+__pycache__/
