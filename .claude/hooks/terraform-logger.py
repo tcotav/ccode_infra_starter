@@ -42,7 +42,7 @@ def ensure_audit_log_exists():
     AUDIT_LOG.parent.mkdir(parents=True, exist_ok=True)
 
 
-def log_result(command, cwd, success, exit_code, user_approved):
+def log_result(command, cwd, success, exit_code):
     """
     Log terraform command result to audit file.
 
@@ -51,19 +51,11 @@ def log_result(command, cwd, success, exit_code, user_approved):
         cwd: Current working directory
         success: Whether command succeeded (boolean)
         exit_code: Command exit code
-        user_approved: Whether user approved the command execution
     """
     ensure_audit_log_exists()
 
     timestamp = datetime.now().isoformat()
-
-    # Determine status based on success and exit code
-    if not user_approved:
-        status = "DENIED_BY_USER"
-    elif success:
-        status = "COMPLETED_SUCCESS"
-    else:
-        status = "COMPLETED_FAILURE"
+    status = "COMPLETED_SUCCESS" if success else "COMPLETED_FAILURE"
 
     log_entry = {
         "timestamp": timestamp,
@@ -71,8 +63,7 @@ def log_result(command, cwd, success, exit_code, user_approved):
         "decision": status,
         "working_dir": cwd,
         "exit_code": exit_code,
-        "success": success,
-        "user_approved": user_approved
+        "success": success
     }
 
     try:
@@ -106,11 +97,10 @@ def main():
     success = tool_response.get("success", False)
     exit_code = tool_response.get("exit_code", "unknown")
 
-    # Check if user approved (if command ran, they must have approved or it was auto-allowed)
-    user_approved = tool_response.get("content", "") != ""  # If there's output, command ran
-
     # Log the result
-    log_result(command, cwd, success, exit_code, user_approved)
+    # Note: PostToolUse only fires after execution. If a PreToolUse hook blocked
+    # the command, this hook never runs -- so every logged command was approved.
+    log_result(command, cwd, success, exit_code)
 
     # Always succeed - don't block workflow on logging failures
     sys.exit(0)
