@@ -67,11 +67,14 @@ Claude will guide you through questions and customize the file with your specifi
 vim AGENTS.md  # or use your preferred editor
 ```
 
-Include:
+AGENTS.md has a clear dividing line separating template content from repository-specific customizations. Add your details in the "REPOSITORY-SPECIFIC CONTEXT" section (below the dividing line):
+
 - What infrastructure this repo manages (GKE clusters, Cloud SQL, networking, etc.)
 - Which environments (dev, staging, prod)
 - Team conventions and approval requirements
 - Links to runbooks or architecture docs
+
+This structure allows you to pull template updates from this repository while preserving your customizations. See the "Maintaining This File" section in AGENTS.md for details on updating from upstream.
 
 **Note:** This repo uses AGENTS.md (with CLAUDE.md as a symlink) to support multiple AI coding agents. You can use either naming convention in your repos. See [DEPLOYMENT.md](.claude/docs/DEPLOYMENT.md#step-2a-interactive-customization-with-claude-code-recommended) for details on the interactive setup.
 
