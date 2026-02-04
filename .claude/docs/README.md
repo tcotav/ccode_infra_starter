@@ -1,8 +1,8 @@
-# Using Claude Code with Infrastructure Repos - SRE Team Guide
+# Using Claude Code with Terraform and Helm - SRE Team Guide
 
 ## Overview
 
-This repository is configured with Claude Code hooks that provide **safety guardrails** for terraform operations. These hooks ensure that AI-assisted development doesn't bypass our standard change management processes.
+This repository is configured with Claude Code hooks that provide **safety guardrails** for terraform and helm operations. These hooks ensure that AI-assisted development doesn't bypass our standard change management processes.
 
 ## Philosophy: You Are In Control
 
@@ -21,13 +21,15 @@ Claude Code helps you work faster by writing code, running safe commands, and na
 
 Hooks are automated checks that run **before** Claude executes commands. They:
 
-1. **Block dangerous operations** - Commands like `terraform apply` are completely forbidden
-2. **Require approval** - All other terraform commands prompt you before running
-3. **Log all activity** - Every terraform command attempt is recorded with timestamps
+1. **Block dangerous operations** - Commands like `terraform apply` and `helm install` are completely forbidden
+2. **Require approval** - All other terraform and helm commands prompt you before running
+3. **Log all activity** - Every terraform and helm command attempt is recorded with timestamps
 
 ### What Gets Blocked?
 
-These commands are **absolutely forbidden** and will never execute:
+#### Terraform Commands
+
+These terraform commands are **absolutely forbidden** and will never execute:
 
 ```bash
 terraform apply          # Must go through PR workflow
@@ -46,7 +48,34 @@ This command can modify infrastructure state and must go through
 your standard PR review workflow.
 ```
 
+#### Helm Commands
+
+These helm commands are **absolutely forbidden** and will never execute:
+
+```bash
+helm install      # Deploys to cluster
+helm upgrade      # Modifies cluster state
+helm uninstall    # Removes releases
+helm delete       # Same as uninstall
+helm rollback     # Reverts releases
+helm test         # Runs tests in cluster
+```
+
+If Claude attempts these, you'll see:
+```
+BLOCKED: helm install is not allowed.
+
+This command deploys to or mutates a cluster and must go through
+your GitOps workflow (ArgoCD, Flux, or PR-driven CI/CD).
+
+For local development, use:
+  helm template <chart>    # Render templates locally
+  helm lint <chart>        # Validate chart structure
+```
+
 ### What Requires Approval?
+
+#### Terraform Commands
 
 All other terraform commands will **prompt you before executing**:
 
@@ -70,6 +99,33 @@ This prompt ensures you review each terraform operation before execution.
 
 Allow? (y/n)
 ```
+
+#### Helm Commands
+
+All other helm commands will **prompt you before executing**:
+
+```bash
+helm template <chart>       # Render templates locally (primary use case)
+helm lint <chart>          # Validate chart structure
+helm dependency update     # Update chart dependencies
+helm package <chart>       # Package chart for distribution
+helm show values <chart>   # Display values
+helm get values <release>  # Get deployed values (read-only)
+```
+
+You'll see prompts like:
+```
+Helm command requires approval:
+
+  Command: helm template ./charts/myapp
+  Working directory: /path/to/your/charts
+
+This prompt ensures you review each helm operation before execution.
+
+Allow? (y/n)
+```
+
+**Devcontainer Recommendation:** If you're not working inside the devcontainer, you'll also see a warning encouraging you to use it. The devcontainer provides consistent terraform and helm versions with pre-configured tooling. While not required, it's the recommended environment for infrastructure work.
 
 ---
 
@@ -98,20 +154,23 @@ To verify they're working:
 
 ### View Audit Logs
 
-All terraform command attempts are logged to `.claude/audit/terraform.log`:
+All terraform and helm command attempts are logged to separate audit files with daily rotation:
 
 ```bash
 # View recent terraform commands
-tail -20 .claude/audit/terraform.log
+tail -20 .claude/audit/terraform-$(date +%Y-%m-%d).log
+
+# View recent helm commands
+tail -20 .claude/audit/helm-$(date +%Y-%m-%d).log
 
 # Pretty print with jq
-cat .claude/audit/terraform.log | jq .
+cat .claude/audit/terraform-$(date +%Y-%m-%d).log | jq .
 
 # See only blocked commands
-cat .claude/audit/terraform.log | jq 'select(.decision == "BLOCKED")'
+cat .claude/audit/terraform-$(date +%Y-%m-%d).log | jq 'select(.decision == "BLOCKED")'
 
 # View specific time range
-cat .claude/audit/terraform.log | jq 'select(.timestamp >= "2026-01-22")'
+cat .claude/audit/terraform-$(date +%Y-%m-%d).log | jq 'select(.timestamp >= "2026-01-22")'
 ```
 
 Example log entry:
@@ -474,6 +533,44 @@ mv .claude/audit/terraform.log .claude/audit/terraform.log.$(date +%Y%m%d)
 rm .claude/audit/terraform.log
 ```
 
+### "I keep seeing devcontainer warnings"
+
+When running terraform or helm commands outside the devcontainer, you'll see:
+
+```
+========================================
+WARNING: Not running in devcontainer
+========================================
+The devcontainer provides:
+  - Consistent terraform/helm versions
+  - Pre-configured tooling and linters
+  - Standardized development environment
+
+Consider using the devcontainer for terraform/helm operations.
+See .devcontainer/ directory for setup instructions.
+```
+
+**What this means:**
+- The warning appears when you run terraform or helm commands outside the devcontainer
+- It's a reminder, not a block - your commands still work
+- The devcontainer ensures everyone on the team uses the same tool versions
+
+**To use the devcontainer:**
+1. Open this repo in VSCode
+2. When prompted, click "Reopen in Container" (or use Command Palette: "Dev Containers: Reopen in Container")
+3. The container includes Claude Code, terraform, helm, and all required tooling
+4. Once inside, the warning won't appear
+
+**Why this matters:**
+- Different terraform/helm versions can produce different plans and outputs
+- The devcontainer includes pre-commit hooks, linters, and standards
+- Reduces "works on my machine" issues
+
+**Working locally is fine if:**
+- You have the correct terraform and helm versions installed
+- You're aware of potential version differences
+- You're comfortable managing your own tooling
+
 ---
 
 ## Advanced Usage
@@ -523,12 +620,12 @@ Yes, eventually:
 
 **Best practice:** Use strict rules initially, then customize based on actual team needs and feedback.
 
-### Can I use these hooks with other tools (kubectl, helm, etc.)?
+### Can I use these hooks with other tools (kubectl, etc.)?
 
-Yes. The terraform-validator.py pattern can be copied for other dangerous commands:
+Yes. This repository includes hooks for both terraform and helm. The same pattern can be extended to other dangerous commands:
 
-1. Copy the pattern from terraform-validator.py
-2. Create kubectl-validator.py, helm-validator.py, etc.
+1. Copy the pattern from terraform-validator.py or helm-validator.py
+2. Create kubectl-validator.py or other tool validators
 3. Add to .claude/settings.json
 
 The same safety principles apply to any infrastructure tool.
@@ -549,6 +646,7 @@ The same safety principles apply to any infrastructure tool.
 
 | Command | Claude Can Do It? | Notes |
 |---------|-------------------|-------|
+| **Terraform** | | |
 | `terraform plan -lock=false` | Yes (with prompt) | Primary use case |
 | `terraform init` | Yes (with prompt) | Module initialization |
 | `terraform validate` | Yes (with prompt) | Syntax checking |
@@ -556,6 +654,15 @@ The same safety principles apply to any infrastructure tool.
 | `terraform state list` | Yes (with prompt) | Read-only state view |
 | `terraform apply` | **BLOCKED** | Use PR workflow |
 | `terraform destroy` | **BLOCKED** | Extremely dangerous |
+| **Helm** | | |
+| `helm template <chart>` | Yes (with prompt) | Primary use case |
+| `helm lint <chart>` | Yes (with prompt) | Validate chart |
+| `helm dependency update` | Yes (with prompt) | Update dependencies |
+| `helm show values` | Yes (with prompt) | Display values |
+| `helm install` | **BLOCKED** | Use GitOps (ArgoCD) |
+| `helm upgrade` | **BLOCKED** | Use GitOps (ArgoCD) |
+| `helm uninstall` | **BLOCKED** | Use GitOps (ArgoCD) |
+| **Other** | | |
 | `git commit` | Yes (with prompt) | Standard git workflow |
 | `kubectl get` | Yes | No restrictions |
 
@@ -565,9 +672,16 @@ The same safety principles apply to any infrastructure tool.
 
 Start with these safe explorations:
 
+**Terraform:**
 1. **"Show me all GKE clusters defined in this repo"**
 2. **"What IAM roles are we granting in prod?"**
 3. **"Run terraform validate in the staging directory"**
 4. **"What would change if I increased the node pool size?"** (asks Claude to run plan)
+
+**Helm:**
+1. **"Show me the values structure for the app chart"**
+2. **"Run helm template to render the manifests locally"**
+3. **"What Helm charts do we have in this repo?"**
+4. **"Lint the staging chart and show me any errors"**
 
 Remember: You're in control. Claude is your tool, not your replacement.
