@@ -351,7 +351,7 @@ You: "Show me what's in prod-main"
 - Claude cannot "trick" the validator
 - Even if Claude tries `terraform apply`, it's blocked
 
-The hooks are enforced by Claude Code itself, not by Claude's behavior.
+The hooks are enforced by Claude Code itself, not by Claude's behavior. However, hooks are a client-side guardrail, not the only line of defense. See [PERMISSIONS.md](./PERMISSIONS.md) for the full layered permissions model covering cloud IAM, just-in-time elevation, CI/CD enforcement, and Kubernetes RBAC.
 
 ### "What if I need to run terraform apply?"
 
