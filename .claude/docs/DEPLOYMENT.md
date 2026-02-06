@@ -1,15 +1,15 @@
-# Deployment Guide - Claude Code Terraform and Helm Hooks
+# Deployment Guide - Claude Code Terraform Hooks
 
 ## Overview
 
-This guide covers how to deploy the Claude Code terraform and Helm safety hooks across your SRE team's repositories.
+This guide covers how to deploy the Claude Code terraform safety hooks across your SRE team's repositories.
 
 ## What Was Built
 
-A complete safety system for using Claude Code with terraform and Helm:
+A complete safety system for using Claude Code with terraform:
 
-- **Pre-execution hooks** - Block dangerous terraform and helm commands, prompt for safe ones
-- **Post-execution logging** - Audit trail of all terraform and helm operations
+- **Pre-execution hooks** - Block dangerous commands, prompt for safe ones
+- **Post-execution logging** - Audit trail of all terraform operations
 - **Team documentation** - Comprehensive usage guide
 - **Testing framework** - Verify hooks work correctly
 
@@ -20,18 +20,14 @@ A complete safety system for using Claude Code with terraform and Helm:
 ├── settings.json              # Hook configuration (COMMIT TO GIT)
 ├── settings.local.json        # Personal overrides (GITIGNORED)
 ├── hooks/
-│   ├── terraform-validator.py # Pre-execution validation for terraform
-│   ├── terraform-logger.py    # Post-execution logging for terraform
-│   ├── helm-validator.py      # Pre-execution validation for helm
-│   └── helm-logger.py         # Post-execution logging for helm
+│   ├── terraform-validator.py # Pre-execution validation
+│   └── terraform-logger.py    # Post-execution logging
 ├── docs/
 │   ├── README.md              # User guide for your team
 │   ├── TESTING.md             # Testing procedures
-│   ├── DEPLOYMENT.md          # This file
-│   └── PERMISSIONS.md         # Layered permissions model
+│   └── DEPLOYMENT.md          # This file
 └── audit/
-    ├── terraform-YYYY-MM-DD.log  # Terraform audit trail (GITIGNORED)
-    └── helm-YYYY-MM-DD.log       # Helm audit trail (GITIGNORED)
+    └── terraform.log          # Audit trail (GITIGNORED)
 
 .gitignore                     # Excludes audit logs and local settings
 ```
@@ -54,7 +50,7 @@ cat .claude/docs/TESTING.md
 - Blocked commands are actually blocked
 - Safe commands prompt correctly
 - Audit log is created and populated
-- Non-terraform/helm commands pass through
+- Non-terraform commands pass through
 
 ### Step 2: Review and Customize
 
@@ -62,10 +58,6 @@ cat .claude/docs/TESTING.md
 
 1. **[.claude/hooks/terraform-validator.py](./.claude/hooks/terraform-validator.py)**
    - Check the `BLOCKED_COMMANDS` list
-   - Adjust if you need different rules for this repo
-
-1. **[.claude/hooks/helm-validator.py](./.claude/hooks/helm-validator.py)**
-   - Check the `BLOCKED_COMMANDS` list for helm
    - Adjust if you need different rules for this repo
 
 2. **[.claude/settings.json](./.claude/settings.json)**
@@ -100,7 +92,7 @@ The default AGENTS.md is generic. A customized version helps Claude Code provide
 2. **Copy and paste this prompt:**
 
    ```
-   I've just installed the Claude Code infrastructure safety hooks in this repository.
+   I've just installed the Claude Code terraform safety hooks in this repository.
    Help me customize the AGENTS.md file for my team by asking me questions about:
 
    - The infrastructure this repository manages
@@ -193,11 +185,11 @@ git add .claude/
 git add .gitignore
 
 # Commit
-git commit -m "Add Claude Code terraform and Helm safety hooks
+git commit -m "Add Claude Code terraform safety hooks
 
-- Blocks dangerous operations (terraform apply/destroy, helm install/upgrade/uninstall)
-- Prompts for user approval on all terraform and helm commands
-- Logs all operations to .claude/audit/ with daily rotation
+- Blocks dangerous operations (apply, destroy, import)
+- Prompts for user approval on all terraform commands
+- Logs all operations to .claude/audit/terraform.log
 - Includes comprehensive documentation for team
 
 See .claude/docs/README.md for usage guide"
@@ -208,25 +200,25 @@ git push origin feature/claude-code-hooks
 
 ### Step 4: Create Pull Request
 
-**PR Title:** "Add Claude Code safety hooks for terraform and Helm operations"
+**PR Title:** "Add Claude Code safety hooks for terraform operations"
 
 **PR Description Template:**
 
 ```markdown
 ## Summary
 
-Adds Claude Code hooks to enforce safe terraform and Helm usage patterns when using AI assistance.
+Adds Claude Code hooks to enforce safe terraform usage patterns when using AI assistance.
 
 ## What This Does
 
-- **Blocks** dangerous commands: `terraform apply/destroy/import`, `helm install/upgrade/uninstall`, state manipulation
-- **Prompts** for user approval on all other terraform and helm commands
-- **Logs** all terraform and helm operations to local audit trail
+- **Blocks** dangerous commands: `terraform apply`, `destroy`, `import`, state manipulation
+- **Prompts** for user approval on all other terraform commands
+- **Logs** all terraform operations to local audit trail
 
 ## Why This Matters
 
-Enables safe use of Claude Code for infrastructure work while maintaining our change management processes:
-- AI cannot bypass PR or GitOps workflow
+Enables safe use of Claude Code for terraform work while maintaining our change management processes:
+- AI cannot bypass PR workflow
 - All operations require explicit approval
 - Complete audit trail of AI-assisted operations
 
@@ -270,17 +262,17 @@ Once merged, announce in your team channel:
 ```
 📢 Claude Code Safety Hooks Now Available
 
-We've added safety guardrails for using Claude Code with terraform and Helm in [repo-name].
+We've added safety guardrails for using Claude Code with terraform in [repo-name].
 
 What it does:
-- Blocks dangerous operations (terraform apply/destroy, helm install/upgrade/uninstall)
-- Prompts you before each terraform and helm command
+- Blocks dangerous operations (terraform apply, destroy, etc.)
+- Prompts you before each terraform command
 - Logs everything for audit trail
 
 How to use:
 1. Open Claude Code in [repo-name]
-2. Ask Claude to help with terraform or Helm (e.g., "add a new node pool", "lint the chart")
-3. Approve commands when prompted
+2. Ask Claude to help with terraform (e.g., "add a new node pool")
+3. Approve terraform commands when prompted
 4. You remain in control - Claude is your intern, not your replacement
 
 Docs: [link to .claude/docs/README.md]
@@ -808,12 +800,12 @@ BLOCKED_COMMANDS = [
 ]
 ```
 
-### Other Infrastructure Tools
+### Non-Terraform Repos
 
-If you want similar hooks for additional tools beyond terraform and Helm:
+If you want similar hooks for other tools:
 
-1. Copy the pattern from terraform-validator.py or helm-validator.py
-2. Create `kubectl-validator.py`, `gcloud-validator.py`, etc.
+1. Copy the pattern from terraform-validator.py
+2. Create `kubectl-validator.py`, `helm-validator.py`, etc.
 3. Add to `.claude/settings.json`
 
 ---
@@ -834,12 +826,11 @@ When you improve the hooks:
 Aggregate audit logs to understand usage patterns:
 
 ```bash
-# Collect logs from all repos (daily rotation format)
-find ~/repos -name "terraform-*.log" -path "*/.claude/audit/*" -exec cat {} \; > all-tf-logs.jsonl
-find ~/repos -name "helm-*.log" -path "*/.claude/audit/*" -exec cat {} \; > all-helm-logs.jsonl
+# Collect logs from all repos
+find ~/repos -name "terraform.log" -path "*/.claude/audit/*" -exec cat {} \; > all-logs.jsonl
 
 # Analyze
-cat all-tf-logs.jsonl all-helm-logs.jsonl | jq -r '.decision' | sort | uniq -c
+cat all-logs.jsonl | jq -r '.decision' | sort | uniq -c
 #  45 BLOCKED
 # 312 COMPLETED_SUCCESS
 #  12 COMPLETED_FAILURE
@@ -890,18 +881,18 @@ Edit `.claude/settings.json` and remove the hooks section temporarily.
 
 This project succeeds when:
 
-1. SRE teams feel confident using Claude Code with terraform and Helm
-2. Zero incidents of accidental terraform applies or helm deploys via Claude
+1. SRE teams feel confident using Claude Code with terraform
+2. Zero incidents of accidental terraform applies via Claude
 3. Teams customize hooks for their needs without breaking safety
 4. The documentation answers questions before they're asked
-5. Other teams extend the pattern for additional tools (kubectl, gcloud, etc.)
+5. Other teams copy this pattern for kubectl, helm, etc.
 
 ## Success Metrics
 
 Track these to measure adoption and effectiveness:
 
-- **Usage:** Number of terraform and helm commands run via Claude
-- **Safety:** Number of blocked apply/destroy/install attempts
+- **Usage:** Number of terraform commands run via Claude
+- **Safety:** Number of blocked apply/destroy attempts
 - **Adoption:** Number of team members using Claude Code
 - **Satisfaction:** Survey results (quarterly)
 - **Incidents:** Any near-misses or actual issues

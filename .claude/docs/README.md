@@ -1,7 +1,5 @@
 # Using Claude Code with Terraform and Helm - SRE Team Guide
 
-Authoritative usage guide for teams. This is your primary reference after installation.
-
 ## Overview
 
 This repository is configured with Claude Code hooks that provide **safety guardrails** for terraform and helm operations. These hooks ensure that AI-assisted development doesn't bypass our standard change management processes.
@@ -525,12 +523,14 @@ The hooks allow terraform commands, but terraform still needs valid credentials.
 
 ### "Audit log is too large"
 
-Audit logs use daily rotation (`terraform-YYYY-MM-DD.log`, `helm-YYYY-MM-DD.log`) and are gitignored. To clean up old files:
+The audit log is gitignored and stored locally. To clean up:
 
 ```bash
-# Delete logs older than 30 days
-find .claude/audit/ -name "terraform-*.log" -mtime +30 -delete
-find .claude/audit/ -name "helm-*.log" -mtime +30 -delete
+# Archive old logs
+mv .claude/audit/terraform.log .claude/audit/terraform.log.$(date +%Y%m%d)
+
+# Or just delete
+rm .claude/audit/terraform.log
 ```
 
 ### "I keep seeing devcontainer warnings"
@@ -578,16 +578,13 @@ See .devcontainer/ directory for setup instructions.
 ### Viewing Logs Programmatically
 
 ```python
-# Parse audit logs (daily rotation: terraform-YYYY-MM-DD.log)
-import glob
+# Parse audit log
 import json
-
-for log_file in sorted(glob.glob('.claude/audit/terraform-*.log')):
-    with open(log_file) as f:
-        for line in f:
-            entry = json.loads(line)
-            if entry['decision'] == 'BLOCKED':
-                print(f"{entry['timestamp']}: {entry['command']}")
+with open('.claude/audit/terraform.log') as f:
+    for line in f:
+        entry = json.loads(line)
+        if entry['decision'] == 'BLOCKED':
+            print(f"{entry['timestamp']}: {entry['command']}")
 ```
 
 ### Integrating with CI/CD
