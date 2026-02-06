@@ -1,8 +1,8 @@
 # Claude Code Infrastructure Starter
 
-Template repository -- copy `.claude/` to your infrastructure repo to get started. For team usage after installation, see the [Team Usage Guide](.claude/docs/README.md).
-
 A starter template for teams using Claude Code with terraform and Helm in GCP infrastructure. Copy this into your repo and start working safely.
+
+Template repository -- copy `.claude/` to your infrastructure repo to get started. For team usage after installation, see the [Team Usage Guide](.claude/docs/README.md).
 
 ## What This Does
 
@@ -11,7 +11,7 @@ Provides **safety hooks** for Claude Code that protect your infrastructure workf
 - **Blocks dangerous operations** -- `terraform apply`, `destroy`, `helm install`, `upgrade`, `uninstall`, and other cluster-mutating commands are completely forbidden
 - **Prompts for safe operations** -- `terraform plan`, `helm template`, `helm lint`, and other read-only commands require your explicit approval before running
 - **Audit trail** -- Every terraform and helm command attempt is logged with timestamps, decisions, and working directory
-- **Devcontainer** -- Optional isolated development environment with pinned tool versions and pre-configured tooling
+- **Devcontainer** -- Optional but recommended isolated development environment with pinned tool versions and pre-configured tooling
 
 ## Quick Start
 
@@ -30,7 +30,9 @@ chmod +x .claude/hooks/*.py
 pytest .claude/hooks/
 ```
 
-### 3. Start Using Claude Code
+### 3. Customize Your AGENTS.md file (Optional - see next section)
+
+### 4. Start Using Claude Code
 
 ```bash
 claude
@@ -46,7 +48,7 @@ Dangerous commands are blocked automatically. Safe commands prompt for your appr
 
 ## Customize with Claude Code
 
-Claude Code reads `AGENTS.md` to understand your infrastructure, so customizing it makes Claude more effective at helping with your specific repo.
+Claude Code reads [AGENTS.md](./AGENTS.md) to understand your infrastructure, so customizing it makes Claude more effective at helping with your specific repo.
 
 **Interactive setup (recommended):** Start Claude Code in your repo and paste this prompt:
 
@@ -64,7 +66,7 @@ When you have enough information, show me a draft of the customized AGENTS.md
 sections for my review before making any changes.
 ```
 
-Claude will guide you through questions and customize the file with your specific infrastructure details. All customizations go in the "REPOSITORY-SPECIFIC CONTEXT" section of AGENTS.md, preserving the template content above it for future updates.
+Claude will guide you through questions and customize the file with your specific infrastructure details. All customizations go in the "REPOSITORY-SPECIFIC CONTEXT" section of AGENTS.md, preserving the template content above it for future updates. Add bullet points as is appropriate for your repo.
 
 **Manual editing:** Edit `AGENTS.md` directly. Add your details below the "REPOSITORY-SPECIFIC CONTEXT" dividing line -- infrastructure overview, environments, team conventions, and deployment workflow.
 
