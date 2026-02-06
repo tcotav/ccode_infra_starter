@@ -237,24 +237,307 @@ tail -1 .claude/audit/terraform.log | jq .
 
 ---
 
-### Test 8: Audit Log Integrity
+### Test 8: Terraform Devcontainer Warning Detection
+
+**Objective:** Verify that the terraform hook warns when not running in devcontainer
+
+#### Test 8a: Running Outside Devcontainer
+
+```bash
+# Ensure IN_DEVCONTAINER is not set
+unset IN_DEVCONTAINER
+
+# Test terraform plan (should include warning)
+echo '{
+  "tool_name": "Bash",
+  "tool_input": {"command": "terraform plan -lock=false"},
+  "cwd": "'$(pwd)'"
+}' | python3 .claude/hooks/terraform-validator.py | jq -r '.hookSpecificOutput.permissionDecisionReason'
+```
+
+**Expected output should include:**
+```
+WARNING: Not running in devcontainer
+========================================
+```
+
+#### Test 8b: Running Inside Devcontainer
+
+```bash
+# Set the devcontainer environment variable
+export IN_DEVCONTAINER=true
+
+# Test terraform plan (should NOT include warning)
+echo '{
+  "tool_name": "Bash",
+  "tool_input": {"command": "terraform plan -lock=false"},
+  "cwd": "'$(pwd)'"
+}' | python3 .claude/hooks/terraform-validator.py | jq -r '.hookSpecificOutput.permissionDecisionReason'
+```
+
+**Expected output should NOT include the devcontainer warning.**
+
+#### Test 8c: Blocked Terraform Commands Don't Show Container Warning
+
+```bash
+# Unset to simulate being outside container
+unset IN_DEVCONTAINER
+
+# Test blocked command (terraform apply)
+echo '{
+  "tool_name": "Bash",
+  "tool_input": {"command": "terraform apply"},
+  "cwd": "'$(pwd)'"
+}' | python3 .claude/hooks/terraform-validator.py | jq -r '.hookSpecificOutput.permissionDecisionReason'
+```
+
+**Expected:** Should see "BLOCKED" message but NOT the devcontainer warning (blocked commands exit immediately, no prompting needed).
+
+---
+
+## Helm Hook Tests
+
+The following tests verify the helm-specific hooks work correctly.
+
+---
+
+### Test 9: Block Dangerous Helm Command (helm install)
+
+**Objective:** Verify that `helm install` is completely blocked
+
+In Claude Code session:
+
+```
+You: "Can you run helm install myapp ./charts/app?"
+```
+
+**Expected behavior:**
+1. Claude attempts to run the command
+2. Hook intercepts it
+3. You see a message like:
+   ```
+   BLOCKED: helm install is not allowed.
+
+   This command deploys to or mutates a cluster and must go through
+   your GitOps workflow (ArgoCD, Flux, or PR-driven CI/CD).
+
+   For local development, use:
+     helm template <chart>    # Render templates locally
+     helm lint <chart>        # Validate chart structure
+   ```
+4. Command does NOT execute
+
+**Verify in logs:**
+```bash
+tail -1 .claude/audit/helm-$(date +%Y-%m-%d).log | jq .
+```
+
+Should show:
+```json
+{
+  "timestamp": "2026-02-04T...",
+  "command": "helm install myapp ./charts/app",
+  "decision": "BLOCKED",
+  "working_dir": "/path/to/repo",
+  "reason": "Blocked: helm install"
+}
+```
+
+---
+
+### Test 10: Prompt for Safe Helm Command (helm template)
+
+**Objective:** Verify that allowed helm commands prompt for approval
+
+In Claude Code session:
+
+```
+You: "Can you run helm template ./charts/app?"
+```
+
+**Expected behavior:**
+1. Claude attempts to run the command
+2. Hook intercepts and prompts:
+   ```
+   Helm command requires approval:
+
+     Command: helm template ./charts/app
+     Working directory: /path/to/repo
+
+   This prompt ensures you review each helm operation before execution.
+
+   Allow? (y/n)
+   ```
+3. If you type `n`: Command is denied and logged
+4. If you type `y`: Command executes
+
+**Verify in logs:**
+```bash
+tail -2 .claude/audit/helm-$(date +%Y-%m-%d).log | jq .
+```
+
+Should show entries for `PENDING_APPROVAL` and completion status.
+
+---
+
+### Test 11: Multiple Blocked Helm Commands
+
+**Objective:** Verify all dangerous helm commands are blocked
+
+Test each of these:
+
+```
+You: "Run helm upgrade myapp ./charts/app"
+You: "Run helm uninstall myapp"
+You: "Run helm rollback myapp 1"
+You: "Run helm test myapp"
+```
+
+**Expected:** Each should be blocked with appropriate error message.
+
+---
+
+### Test 12: Helm Devcontainer Warning Detection
+
+**Objective:** Verify that the helm hook warns when not running in devcontainer
+
+#### Test 12a: Running Outside Devcontainer
+
+```bash
+# Ensure IN_DEVCONTAINER is not set
+unset IN_DEVCONTAINER
+
+# Test helm template (should include warning)
+echo '{
+  "tool_name": "Bash",
+  "tool_input": {"command": "helm template ./charts/app"},
+  "cwd": "'$(pwd)'"
+}' | python3 .claude/hooks/helm-validator.py | jq -r '.hookSpecificOutput.permissionDecisionReason'
+```
+
+**Expected output should include:**
+```
+WARNING: Not running in devcontainer
+========================================
+```
+
+#### Test 12b: Running Inside Devcontainer
+
+```bash
+# Set the devcontainer environment variable
+export IN_DEVCONTAINER=true
+
+# Test helm template (should NOT include warning)
+echo '{
+  "tool_name": "Bash",
+  "tool_input": {"command": "helm template ./charts/app"},
+  "cwd": "'$(pwd)'"
+}' | python3 .claude/hooks/helm-validator.py | jq -r '.hookSpecificOutput.permissionDecisionReason'
+```
+
+**Expected output should NOT include the devcontainer warning.**
+
+#### Test 12c: Blocked Helm Commands Don't Show Container Warning
+
+```bash
+# Unset to simulate being outside container
+unset IN_DEVCONTAINER
+
+# Test blocked command (helm install)
+echo '{
+  "tool_name": "Bash",
+  "tool_input": {"command": "helm install myapp ./charts/app"},
+  "cwd": "'$(pwd)'"
+}' | python3 .claude/hooks/helm-validator.py | jq -r '.hookSpecificOutput.permissionDecisionReason'
+```
+
+**Expected:** Should see "BLOCKED" message but NOT the devcontainer warning (blocked commands exit immediately, no prompting needed).
+
+---
+
+### Test 13: Manual Testing of Helm Hook Scripts
+
+**Objective:** Test helm hooks directly without Claude Code
+
+#### Test the helm validator (PreToolUse):
+
+```bash
+# Test blocking helm install
+echo '{
+  "tool_name": "Bash",
+  "tool_input": {"command": "helm install myapp ./charts/app"},
+  "cwd": "'$(pwd)'"
+}' | python3 .claude/hooks/helm-validator.py
+
+# Should output JSON with permissionDecision: "deny"
+```
+
+```bash
+# Test prompting for helm template
+echo '{
+  "tool_name": "Bash",
+  "tool_input": {"command": "helm template ./charts/app"},
+  "cwd": "'$(pwd)'"
+}' | python3 .claude/hooks/helm-validator.py
+
+# Should output JSON with permissionDecision: "ask"
+```
+
+```bash
+# Test non-helm command passes through
+echo '{
+  "tool_name": "Bash",
+  "tool_input": {"command": "ls -la"},
+  "cwd": "'$(pwd)'"
+}' | python3 .claude/hooks/helm-validator.py
+
+# Should output JSON with permissionDecision: "allow"
+```
+
+#### Test the helm logger (PostToolUse):
+
+```bash
+# Simulate successful helm command
+echo '{
+  "tool_name": "Bash",
+  "tool_input": {"command": "helm template ./charts/app"},
+  "tool_response": {"success": true, "exit_code": 0, "content": "Success!"},
+  "cwd": "'$(pwd)'"
+}' | python3 .claude/hooks/helm-logger.py
+
+# Check the audit log
+tail -1 .claude/audit/helm-$(date +%Y-%m-%d).log | jq .
+```
+
+---
+
+### Test 14: Audit Log Integrity
 
 **Objective:** Verify audit logging works correctly
 
 ```bash
 # Clear existing logs for clean test
-rm -f .claude/audit/terraform.log
+rm -f .claude/audit/terraform-$(date +%Y-%m-%d).log
+rm -f .claude/audit/helm-$(date +%Y-%m-%d).log
 
-# Run several commands via Claude Code
+# Run several commands via Claude Code for both tools
+# Terraform:
 # - Try a blocked command (terraform apply)
 # - Try an allowed command with approval (terraform fmt)
 # - Try an allowed command with denial (terraform init, then say 'n')
+#
+# Helm:
+# - Try a blocked command (helm install)
+# - Try an allowed command with approval (helm template)
+# - Try an allowed command with denial (helm lint, then say 'n')
 
-# View the full log
-cat .claude/audit/terraform.log | jq .
+# View the full logs
+cat .claude/audit/terraform-$(date +%Y-%m-%d).log | jq .
+cat .claude/audit/helm-$(date +%Y-%m-%d).log | jq .
 
 # Count entries
-wc -l .claude/audit/terraform.log
+wc -l .claude/audit/terraform-$(date +%Y-%m-%d).log
+wc -l .claude/audit/helm-$(date +%Y-%m-%d).log
 ```
 
 **Expected:** Each command attempt should have corresponding log entries.
@@ -361,15 +644,28 @@ Run these tests before committing any changes to the hook scripts.
 
 Before considering the hooks "production ready":
 
+**Terraform:**
+- [ ] All blocked terraform commands are actually blocked
+- [ ] Safe terraform commands prompt for approval
+- [ ] Non-terraform commands pass through
+- [ ] Terraform audit log captures all attempts
+- [ ] Devcontainer warning appears when outside container
+- [ ] No devcontainer warning when inside container
+
+**Helm:**
+- [ ] All blocked helm commands are actually blocked
+- [ ] Safe helm commands prompt for approval
+- [ ] Non-helm commands pass through
+- [ ] Helm audit log captures all attempts
+- [ ] Devcontainer warning appears when outside container
+- [ ] No devcontainer warning when inside container
+
+**General:**
 - [ ] Automated tests pass: `pytest .claude/hooks/ -v`
-- [ ] All blocked commands are actually blocked (terraform and helm)
-- [ ] Safe commands prompt for approval
-- [ ] Non-terraform/helm commands pass through
-- [ ] Audit log captures all attempts
-- [ ] Audit log includes timestamps and working directory
+- [ ] Audit logs include timestamps and working directory
 - [ ] Hooks work in different directories of the repo
 - [ ] Error messages are clear and actionable
-- [ ] Log file doesn't interfere with git operations (gitignored)
+- [ ] Log files don't interfere with git operations (gitignored)
 
 ---
 
@@ -381,12 +677,12 @@ Once testing is complete:
    ```bash
    git add .claude/
    git add .gitignore
-   git commit -m "Add Claude Code terraform safety hooks"
+   git commit -m "Add Claude Code terraform and helm safety hooks"
    ```
 
 2. **Document in team wiki/Confluence**
 
-3. **Create demo video** showing hooks in action
+3. **Create demo video** showing hooks in action (both terraform and helm)
 
 4. **Share with team** in #sre-platform channel
 

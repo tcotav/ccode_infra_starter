@@ -1,171 +1,444 @@
 # Permissions Model for Coding Agents in Infrastructure Repos
 
-This document outlines a layered permissions strategy for enabling Claude Code (and other coding agents) to operate safely in infrastructure repositories. The goal is to let developers own their cloud and Kubernetes environments while maintaining defense-in-depth against accidental or unauthorized mutations.
+This document outlines a layered permissions strategy for enabling Claude Code (and other coding agents) to operate safely in infrastructure repositories. The goal is to let developers work with their cloud and Kubernetes environments while maintaining defense-in-depth against accidental or unauthorized mutations.
 
-This guidance is cloud-provider agnostic. Where provider-specific implementation details are relevant, examples are given for both AWS and GCP as reference.
+**Key recommendation:** Run coding agents in a devcontainer with dedicated read-only credentials, isolated from the developer's personal credentials. This transforms client-side hooks from a primary safety mechanism into one layer of a robust technical boundary.
 
-## How Coding Agents Get Permissions
+## Why Devcontainers for Coding Agents?
 
-Coding agents like Claude Code run as subprocesses on the developer's machine. They inherit whatever credentials and permissions the developer has: CLI auth tokens, kubeconfig, environment variables, service account keys. The hooks in this repo are a client-side guardrail, not a server-side enforcement boundary. They prevent accidental dangerous commands, but they are not a substitute for proper IAM.
+**Problem:** By default, coding agents inherit all of the developer's local credentials - their full cloud CLI authentication, kubeconfig access, SSH keys, service account keys, and environment variables. If hooks fail or are bypassed, the agent has the same permissions as the developer.
 
-The core question is: **what permissions should the developer's local environment have, and how do you layer enforcement so that no single layer is the only thing preventing a bad outcome?**
+**Solution:** Run the coding agent in a devcontainer with dedicated, read-only credentials that are completely isolated from the developer's personal credentials.
+
+### Benefits of This Pattern
+
+This approach transforms client-side hooks from a single point of failure into one layer in a robust technical boundary:
+
+1. **Hard credential isolation** - The agent literally cannot access the developer's host credentials, even if all hooks are disabled or bypassed
+2. **Least privilege by design** - Container credentials are scoped to exactly what's needed: read-only cloud access and read-only kubeconfig
+3. **Consistent across team** - Every developer's agent environment has identical permission scope
+4. **No long-lived keys** - Use cloud-native identity federation for short-lived tokens where possible
+5. **Defense in depth** - Even if the agent attempts dangerous operations, the underlying service account cannot execute them
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ Developer's Host Machine                                │
+│                                                          │
+│ ┌─────────────────────────────────────────────────────┐ │
+│ │ Devcontainer (coding agent environment)             │ │
+│ │                                                      │ │
+│ │  - Claude Code running inside container             │ │
+│ │  - Cloud credentials: read-only service account     │ │
+│ │  - Kubeconfig: read-only RBAC to owned resources    │ │
+│ │  - Hooks: .claude/hooks/* (additional guardrail)    │ │
+│ │                                                      │ │
+│ │  Can run: terraform plan, helm template, kubectl get│ │
+│ │  Cannot run: terraform apply, kubectl apply/delete  │ │
+│ └─────────────────────────────────────────────────────┘ │
+│                                                          │
+│ Developer's Host Credentials (separate):                │
+│  - Full cloud CLI access with elevation available       │
+│  - Full kubeconfig with write access if needed          │
+│  - Used for manual operations outside container         │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Key insight:** The developer can still run `terraform apply` manually on their host machine when needed. But the agent running in the container cannot, even if hooks are completely removed. This separates human decision-making from agent operations.
+
+## Cloud-Specific Implementation Patterns
+
+The following sections provide implementation guidance for GCP, AWS, and Azure. Choose the pattern that matches your cloud provider.
+
+### Google Cloud Platform (GCP)
+
+#### 1. Create Service Account for Agent
+
+```bash
+# Create service account for coding agents
+gcloud iam service-accounts create terraform-reader \
+    --display-name="Terraform Read-Only for Coding Agents" \
+    --project=YOUR_PROJECT
+
+# Grant minimal read permissions
+gcloud projects add-iam-policy-binding YOUR_PROJECT \
+    --member="serviceAccount:terraform-reader@YOUR_PROJECT.iam.gserviceaccount.com" \
+    --role="roles/viewer"
+
+# Grant state bucket read access
+gsutil iam ch \
+    serviceAccount:terraform-reader@YOUR_PROJECT.iam.gserviceaccount.com:objectViewer \
+    gs://your-terraform-state-bucket
+```
+
+#### 2. Use Workload Identity Federation (Preferred)
+
+Instead of downloading service account keys, use Workload Identity Federation for short-lived tokens:
+
+```bash
+# Create workload identity pool
+gcloud iam workload-identity-pools create coding-agents \
+    --location="global" \
+    --display-name="Coding Agent Devcontainers"
+
+# Create provider (adapt for your identity issuer)
+gcloud iam workload-identity-pools providers create-oidc devcontainer \
+    --location="global" \
+    --workload-identity-pool="coding-agents" \
+    --issuer-uri="YOUR_IDENTITY_ISSUER" \
+    --attribute-mapping="google.subject=assertion.sub"
+
+# Bind service account
+gcloud iam service-accounts add-iam-policy-binding \
+    terraform-reader@YOUR_PROJECT.iam.gserviceaccount.com \
+    --role="roles/iam.workloadIdentityUser" \
+    --member="principalSet://iam.googleapis.com/projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/coding-agents/*"
+```
+
+For local devcontainers, you may use application default credentials from a dedicated gcloud configuration.
+
+#### 3. Kubernetes RBAC for GKE
+
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: agent-reader
+rules:
+- apiGroups: ["*"]
+  resources: ["*"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: agent-reader-binding
+  namespace: your-team-namespace
+subjects:
+- kind: ServiceAccount
+  name: terraform-reader
+  namespace: default
+roleRef:
+  kind: ClusterRole
+  name: agent-reader
+  apiGroup: rbac.authorization.k8s.io
+```
+
+### Amazon Web Services (AWS)
+
+#### 1. Create IAM Role for Agent
+
+```bash
+# Create IAM policy for read-only terraform access
+cat > terraform-reader-policy.json <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:ListBucket"
+      ],
+      "Resource": [
+        "arn:aws:s3:::your-terraform-state-bucket",
+        "arn:aws:s3:::your-terraform-state-bucket/*"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ec2:Describe*",
+        "eks:Describe*",
+        "eks:List*",
+        "iam:Get*",
+        "iam:List*",
+        "s3:ListAllMyBuckets",
+        "rds:Describe*"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+EOF
+
+aws iam create-policy \
+    --policy-name TerraformReaderPolicy \
+    --policy-document file://terraform-reader-policy.json
+
+# Create role for agent
+aws iam create-role \
+    --role-name terraform-reader \
+    --assume-role-policy-document file://trust-policy.json
+
+aws iam attach-role-policy \
+    --role-name terraform-reader \
+    --policy-arn arn:aws:iam::ACCOUNT_ID:policy/TerraformReaderPolicy
+```
+
+#### 2. Configure Devcontainer with AWS Credentials
+
+Use AWS credential files or environment variables in the devcontainer, scoped to the read-only role:
+
+```json
+{
+  "containerEnv": {
+    "AWS_ROLE_ARN": "arn:aws:iam::ACCOUNT_ID:role/terraform-reader",
+    "AWS_WEB_IDENTITY_TOKEN_FILE": "/var/run/secrets/eks.amazonaws.com/serviceaccount/token"
+  }
+}
+```
+
+#### 3. Kubernetes RBAC for EKS
+
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: agent-reader
+rules:
+- apiGroups: ["*"]
+  resources: ["*"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: agent-reader-binding
+  namespace: your-team-namespace
+subjects:
+- kind: ServiceAccount
+  name: terraform-reader
+  namespace: default
+roleRef:
+  kind: ClusterRole
+  name: agent-reader
+  apiGroup: rbac.authorization.k8s.io
+```
+
+Map the IAM role to the Kubernetes service account using IRSA (IAM Roles for Service Accounts).
+
+### Microsoft Azure
+
+#### 1. Create Service Principal for Agent
+
+```bash
+# Create service principal
+az ad sp create-for-rbac \
+    --name "terraform-reader" \
+    --role "Reader" \
+    --scopes /subscriptions/SUBSCRIPTION_ID
+
+# Grant storage account read access for terraform state
+az role assignment create \
+    --assignee SERVICE_PRINCIPAL_APP_ID \
+    --role "Storage Blob Data Reader" \
+    --scope /subscriptions/SUBSCRIPTION_ID/resourceGroups/RESOURCE_GROUP/providers/Microsoft.Storage/storageAccounts/STORAGE_ACCOUNT
+```
+
+#### 2. Configure Devcontainer with Azure Credentials
+
+```json
+{
+  "containerEnv": {
+    "AZURE_CLIENT_ID": "SERVICE_PRINCIPAL_APP_ID",
+    "AZURE_TENANT_ID": "TENANT_ID",
+    "AZURE_SUBSCRIPTION_ID": "SUBSCRIPTION_ID"
+  },
+  "mounts": [
+    "source=${localWorkspaceFolder}/.devcontainer/azure-credentials,target=/home/node/.azure,type=bind,readonly"
+  ]
+}
+```
+
+Or use Azure Workload Identity for AKS clusters.
+
+#### 3. Kubernetes RBAC for AKS
+
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: agent-reader
+rules:
+- apiGroups: ["*"]
+  resources: ["*"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: agent-reader-binding
+  namespace: your-team-namespace
+subjects:
+- kind: ServiceAccount
+  name: terraform-reader
+  namespace: default
+roleRef:
+  kind: ClusterRole
+  name: agent-reader
+  apiGroup: rbac.authorization.k8s.io
+```
+
+## Generic Devcontainer Configuration
+
+This example can be adapted for any cloud provider:
+
+`.devcontainer/devcontainer.json`:
+
+```json
+{
+  "name": "Terraform Agent Environment",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+  "features": {
+    "ghcr.io/devcontainers/features/terraform:1": {},
+    "ghcr.io/devcontainers/features/kubectl-helm-minikube:1": {}
+  },
+  "postCreateCommand": ".devcontainer/setup-agent-credentials.sh",
+  "remoteEnv": {
+    "IN_DEVCONTAINER": "true"
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "anthropic.claude-code",
+        "hashicorp.terraform"
+      ]
+    }
+  }
+}
+```
+
+`.devcontainer/setup-agent-credentials.sh`:
+
+```bash
+#!/bin/bash
+set -e
+
+# Configure cloud credentials (cloud-specific)
+# This script should activate the read-only service account
+# and configure kubectl with read-only context
+
+echo "Agent environment configured with read-only credentials"
+
+# Verify read-only access
+echo "Testing read access..."
+terraform version
+kubectl auth can-i --list --namespace=your-team-namespace || true
+```
+
+## Testing the Isolation
+
+Once configured, verify the agent cannot perform dangerous operations even without hooks:
+
+```bash
+# Inside devcontainer - these should FAIL due to IAM/RBAC, not hooks
+terraform apply                    # Permission denied (no write IAM)
+kubectl delete pod/some-pod        # Forbidden (RBAC read-only)
+
+# Inside devcontainer - these should SUCCEED
+terraform plan -lock=false         # Works (read state, read cloud APIs)
+helm template ./charts/app         # Works (local operation)
+kubectl get pods                   # Works (read-only RBAC)
+kubectl logs pod/some-pod          # Works (read-only RBAC)
+```
 
 ## Enforcement Layers
 
-### Layer 1: Agent Hooks (Client-Side Guardrails)
+### Layer 1: Claude Code Hooks (Client-Side Guardrails)
 
-The outermost layer. Hooks catch accidental commands and create audit trails. They are valuable but must not be the only layer preventing harm.
+The outermost layer. Hooks in `.claude/hooks/` catch accidental commands and create audit trails. They provide fast feedback, user prompts, and comprehensive logging.
 
 - Pre-execution validators block dangerous commands (`terraform apply`, `helm install`, etc.)
 - Safe commands (`terraform plan`, `helm template`) require explicit user approval
+- Devcontainer detection warns when running outside the standardized environment
 - All command attempts are logged to local audit files
 
 **Limitation:** These are client-side only. A determined user or a misconfigured agent could bypass them. They are defense-in-depth, not a security boundary.
 
-### Layer 2: Cloud IAM — Base Permissions (Least Privilege)
+**When combined with devcontainer pattern:** Hooks become the UX layer (fast feedback, prompts, audit logs, environment reminders) while the container's isolated credentials become the enforcement layer.
 
-Developers who "own their environments" do not need broad write access to cloud accounts or projects. For local validation workflows (terraform plan, Helm template rendering), they need read-only access. The CI/CD system holds the write permissions.
+### Layer 2: Cloud IAM - Base Permissions (Least Privilege)
 
-**What developers need locally:**
+Developers who "own their environments" do not need full admin access. For terraform plan and Helm template workflows, they need:
 
-- Read-only access to cloud resources in their scope (accounts, projects, subscriptions)
-- Read access to terraform remote state storage
-- Sufficient API access to run `terraform plan` (which queries resource state but makes no changes)
+- **Read-only access** to cloud resources and APIs
+- **Read access** to terraform state storage (S3, GCS, Azure Storage)
+- **Service usage/API query** permissions where applicable
 
-**Provider examples:**
+They do not need write permissions for local validation workflows. The CI/CD system holds the write permissions.
 
-| Capability | AWS | GCP |
-|---|---|---|
-| Base read access | `ReadOnlyAccess` managed policy or scoped custom policy | `roles/viewer` on relevant projects |
-| Terraform state | `s3:GetObject` on state bucket | `roles/storage.objectViewer` on state bucket |
-| API query access | Included in ReadOnlyAccess | `roles/serviceusage.serviceUsageConsumer` |
-| Write access | None locally — held by CI/CD role | None locally — held by CI/CD service account |
+**Devcontainer integration:** Use a dedicated service account with these exact permissions inside the devcontainer. This creates hard isolation - the agent literally cannot access the developer's personal credentials or any elevated permissions they might have on their host machine.
 
-### Layer 3: Just-in-Time Access Elevation
+### Layer 3: Just-in-Time Elevation (Optional)
 
-This layer bridges the gap between "I can read everything" and "I occasionally need to debug something live." The key properties of a good JIT elevation system:
+For environments where developers occasionally need write access for debugging:
 
-- **Base role is read-only** across owned resources
-- **Elevated access is time-limited**, requires justification, and is fully logged
-- **Elevation requires interactive human approval** that a coding agent cannot trigger on its own
-- **Even if a hook fails**, the underlying credentials cannot do damage without explicit human-initiated elevation
+- **GCP:** Google PAM (Privileged Access Manager)
+- **AWS:** AWS IAM Access Analyzer with time-limited elevation
+- **Azure:** Azure PIM (Privileged Identity Management)
 
-A coding agent's inability to self-elevate is a feature. It means the human remains in the loop for any write operation, regardless of what happens at the hook layer.
+These systems bridge the gap between "I need to read everything" and "I occasionally need to debug something live."
 
-**Provider-specific options:**
+- Base role: read-only across owned projects
+- Elevated role: time-limited write access, requires justification, fully logged
+- Claude Code cannot trigger elevation (it requires interactive approval), which is a feature, not a bug
 
-| Feature | AWS | GCP |
-|---|---|---|
-| JIT elevation service | AWS IAM Identity Center (temporary elevated access) | Google PAM (Privileged Access Manager) |
-| Mechanism | Assume a higher-privilege role via SSO portal; time-bound session | Request elevated role via Cloud Console; time-bound grant |
-| Agent can self-elevate? | No (requires SSO browser flow) | No (requires Console approval) |
-| Logging | CloudTrail records role assumption | Cloud Audit Logs record PAM grants |
-| Alternative approaches | [aws-vault](https://github.com/99designs/aws-vault) with MFA-gated assume-role; custom STS broker | Conditional IAM bindings with expiry; custom token broker |
+### Layer 4: CI/CD Pipeline
 
-**If your provider lacks a built-in JIT service**, the same principle can be implemented with:
-- A short-lived token broker that requires out-of-band approval (Slack, PagerDuty, etc.)
-- MFA-gated role assumption with short session duration
-- HashiCorp Vault dynamic credentials with approval workflows
+This is the hard enforcement boundary for infrastructure mutations.
 
-### Layer 4: CI/CD Pipeline (The Hard Enforcement Boundary)
-
-This is where infrastructure mutations actually happen and should be the primary enforcement point.
-
-- Dedicated service identity with write permissions (not developer credentials)
+- Service account with write permissions (not developer credentials)
 - Plan output reviewed in PR before any apply
-- Apply gated on explicit approval (human review, required approvals, policy checks)
+- Apply gated on explicit approval
 - Drift detection catches out-of-band changes
-- Policy-as-code (OPA, Sentinel, Spacelift policies) for resource-level controls
+- Policy enforcement (OPA, Sentinel) for resource-level controls
 
-**Common CI/CD systems for terraform:**
-
-| System | Key safety feature |
-|---|---|
-| Atlantis | PR-driven plan/apply with approval gates |
-| Spacelift | OPA policies, approval workflows, drift detection |
-| Terraform Cloud/Enterprise | Sentinel policies, run-level approval |
-| GitHub Actions + OIDC | Short-lived credentials via OIDC federation, no stored secrets |
-
-The CI/CD service identity should be the only identity with write permissions to production infrastructure. Developer credentials should never be able to `terraform apply` against production, regardless of what happens at other layers.
-
-### Layer 5: Kubernetes RBAC — Namespace-Scoped Access
+### Layer 5: Kubernetes RBAC - Namespace-Scoped Access
 
 For Helm and kubectl interactions:
 
 - **Read access** to owned namespaces (view pods, logs, events for debugging)
 - **No write access** from local kubeconfig (deployments go through GitOps)
-- GitOps controller UI/CLI (ArgoCD, Flux) for deployment status, not direct `kubectl` mutations
+- GitOps UI/CLI for deployment status, not direct `kubectl` mutations
 - RBAC bindings scoped to namespaces, not cluster-wide
 
-Kubernetes RBAC is enforced server-side by the API server, independent of client-side hooks. This makes it a reliable enforcement boundary even if the agent bypasses hook-layer controls.
+## When to Use This Pattern
 
-**Implementation pattern:**
+**Strongly recommended for:**
+- Production infrastructure repositories
+- Teams with compliance requirements (SOC2, PCI, HIPAA)
+- Environments where developers have elevated permissions on their host but agents should not
+- Organizations already using devcontainers for development
 
-```yaml
-# Read-only ClusterRole for developer/agent access
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: developer-readonly
-rules:
-- apiGroups: ["", "apps", "batch"]
-  resources: ["pods", "deployments", "services", "jobs", "events", "configmaps"]
-  verbs: ["get", "list", "watch"]
-- apiGroups: [""]
-  resources: ["pods/log"]
-  verbs: ["get"]
-```
+**May be overkill for:**
+- Personal sandbox projects
+- Environments where developers already have read-only access everywhere
+- Teams just getting started with coding agents (add this after establishing workflow)
 
-Bind this per-namespace to team groups (e.g., via your identity provider's group mappings to Kubernetes RBAC).
+## Integration with Hooks
 
-## Recommendations
+The devcontainer pattern **complements** hooks, not replaces them:
 
-### Short Term (High Impact)
+- **Hooks** provide fast feedback, user prompts, and audit logging (UX layer)
+- **Devcontainer credentials** provide hard enforcement even if hooks fail (security layer)
 
-- Establish read-only base IAM for developers across owned cloud resources
-- Ensure terraform state storage grants read-only to developers, write-only to CI/CD identities
-- Configure kubeconfig contexts that are read-only by default (enforce via Kubernetes RBAC, not just cloud-level IAM on the cluster)
-- Evaluate and begin rollout of a JIT elevation mechanism appropriate to your cloud provider
-
-### Medium Term
-
-- Policy-as-code in CI/CD enforcing resource-type restrictions per team and project
-- Namespace-scoped Kubernetes RBAC tied to team identity (identity provider groups mapped to RBAC bindings)
-- Workload identity for anything running in-cluster (eliminate long-lived service account keys or access keys)
-
-### For Coding Agents Specifically
-
-- Client-side hooks (this repo) handle the CLI guardrail layer
-- Consider a dedicated CLI profile or service identity for coding agent sessions with explicit read-only scope, separate from the developer's full credentials (e.g., set provider-specific environment variables in the shell where the agent runs)
-- For Kubernetes, a dedicated kubeconfig context with a read-only ClusterRole binding
-- Agents should never have access to decrypt production secrets locally; enforce this at the secrets management layer (Vault, cloud-native secret managers, sealed-secrets), not just at the hook layer
-
-## Open Questions
-
-These questions need answers to refine this model for a specific organization:
-
-### Infrastructure Organization
-
-1. **How are cloud accounts/projects structured per team?** (shared accounts vs. team-per-account vs. environment-per-account) This determines the blast radius of any given set of credentials.
-
-2. **What does "developers own their environments" mean in practice?** Do they define terraform themselves, or do they fill in variables for platform-team-maintained modules? This determines whether they need broad or narrow read access.
-
-### Current Access Patterns
-
-3. **Do developers currently have any write access they use locally, or does everything already go through CI/CD?** If there are legitimate local write operations (e.g., `terraform import`, one-off debugging), those workflows need to be accounted for.
-
-4. **Are there break-glass scenarios to support?** (incident response where someone needs fast write access) JIT elevation can handle this, but the workflow needs to be designed explicitly.
-
-### Identity and Secrets
-
-5. **What is the identity model?** Direct cloud IAM, SSO federation, or something else? This affects how JIT elevation and RBAC bindings scale across teams.
-
-6. **Is there an existing secrets management approach?** (cloud-native secret managers, Vault, sealed-secrets) Coding agents must never have access to decrypt production secrets locally.
-
-### Helm and Chart Ownership
-
-7. **How are Helm values files managed?** If developers modify values files but the platform team owns chart templates, permissions can be scoped differently than if developers own the full chart.
+Both layers together create a robust safety system.
 
 ## Key Principle
 
-No single layer should be the one thing standing between a coding agent and a production outage. Agent hooks are layer 1 (prevent accidental commands). JIT elevation plus read-only base IAM is layer 2 (limit what credentials can do even if layer 1 fails). CI/CD with its own service identity is layer 3 (the enforcement boundary for mutations). All three layers are required.
+No single layer should be the one thing standing between a coding agent and a production outage. Defense in depth requires multiple overlapping controls:
+
+**Recommended layered approach (with devcontainer):**
+1. **Hooks** - Fast feedback and user prompts (UX layer)
+2. **Devcontainer with dedicated service account** - Hard credential isolation, IAM-enforced read-only (technical enforcement)
+3. **Just-in-time elevation for developer's host credentials** - Time-limited elevation when humans need write access
+4. **CI/CD pipeline with its own service account** - The actual deployment enforcement boundary
+
+**Minimum layered approach (without devcontainer):**
+1. **Hooks** - Prevent accidental commands (client-side guardrail only)
+2. **Just-in-time elevation plus read-only base IAM** - Limit what credentials can do if hooks fail
+3. **CI/CD with its own service account** - Enforcement boundary for mutations
+
+The devcontainer pattern is strongly recommended because it transforms hooks from the primary safety mechanism into one component of a robust technical boundary. Even if hooks are completely disabled, the agent still cannot perform write operations.

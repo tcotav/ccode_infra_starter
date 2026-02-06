@@ -10,6 +10,7 @@ Scoped to Helm chart development workflows. Encourages local validation
 Behavior:
 - BLOCKS: helm install, upgrade, uninstall, rollback, test (cluster mutations)
 - PROMPTS: helm template, lint, show, dependency, package, etc. (local dev)
+- WARNS: If not running in devcontainer (encourages consistent environment)
 - LOGS: All helm command attempts to .claude/audit/helm.log
 
 Usage:
@@ -61,6 +62,40 @@ BLOCKED_COMMANDS = [
 
 # Pattern to identify any helm command
 HELM_PATTERN = HELM_COMMAND
+
+
+def is_in_devcontainer():
+    """
+    Check if running inside the devcontainer.
+
+    Returns:
+        bool: True if IN_DEVCONTAINER environment variable is set to 'true'
+    """
+    return os.environ.get('IN_DEVCONTAINER', '').lower() == 'true'
+
+
+def get_container_warning():
+    """
+    Generate warning message if not running in devcontainer.
+
+    Returns:
+        str: Warning message if not in container, empty string otherwise
+    """
+    if is_in_devcontainer():
+        return ""
+
+    return (
+        "\n\n"
+        "========================================\n"
+        "WARNING: Not running in devcontainer\n"
+        "========================================\n"
+        "The devcontainer provides:\n"
+        "  - Consistent helm versions\n"
+        "  - Pre-configured tooling and linters\n"
+        "  - Standardized development environment\n\n"
+        "Consider using the devcontainer for helm operations.\n"
+        "See .devcontainer/ directory for setup instructions."
+    )
 
 
 def ensure_audit_log_exists():
@@ -136,6 +171,9 @@ def check_command(command, cwd):
     suspicious = [kw for kw in ("install", "upgrade", "uninstall", "delete", "rollback")
                   if re.search(rf"\b{kw}\b", command, re.IGNORECASE)]
 
+    # Get container warning (empty string if in container)
+    container_warning = get_container_warning()
+
     if suspicious:
         keywords = ", ".join(suspicious)
         reason = (
@@ -145,6 +183,7 @@ def check_command(command, cwd):
             f"  Working directory: {cwd}\n\n"
             f"This may be using variables, eval, or other indirection to run a\n"
             f"blocked operation. Review the full command carefully before approving."
+            f"{container_warning}"
         )
         log_command(command, "PENDING_APPROVAL_SUSPICIOUS", cwd,
                     f"Contains blocked keywords: {keywords}")
@@ -154,6 +193,7 @@ def check_command(command, cwd):
             f"  Command: {command}\n"
             f"  Working directory: {cwd}\n\n"
             f"This prompt ensures you review each helm operation before execution."
+            f"{container_warning}"
         )
         log_command(command, "PENDING_APPROVAL", cwd, "Awaiting user approval")
 
