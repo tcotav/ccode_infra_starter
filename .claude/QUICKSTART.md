@@ -1,13 +1,16 @@
-# Claude Code Terraform Hooks - Quick Start
+# Claude Code Terraform and Helm Hooks - Quick Start
+
+Post-install setup and verification. For daily usage, see the [Team Usage Guide](./docs/README.md).
 
 ## TL;DR
 
-Safety system for using Claude Code with terraform that:
+Safety system for using Claude Code with terraform and Helm that:
 - Blocks `terraform apply`, `destroy`, `import` (must use PR workflow)
-- Prompts for approval on safe commands (`plan`, `validate`, `fmt`, etc.)
-- Logs all terraform operations with timestamps
+- Blocks `helm install`, `upgrade`, `uninstall` (must use GitOps workflow)
+- Prompts for approval on safe commands (`plan`, `validate`, `template`, `lint`, etc.)
+- Logs all terraform and helm operations with timestamps
 
-## Installation
+## Setup
 
 ### 1. Prerequisites
 
@@ -17,11 +20,38 @@ python3 --version
 
 # Verify Claude Code is installed
 claude --version
+
+# Verify pytest is available (needed for step 5)
+pytest --version
+# If missing: pip install pytest
 ```
 
-### 2. Create Your Context File
+### 2. Update Your .gitignore
+
+The hooks write audit logs to `.claude/audit/`. Add these entries to your existing `.gitignore` to keep them out of version control:
+
+```bash
+cat >> .gitignore << 'EOF'
+
+# Claude Code audit logs (contain user-specific command history)
+.claude/audit/
+
+# Claude Code local settings (user-specific overrides)
+.claude/settings.local.json
+
+# AI agent personal context files (user preferences, never commit)
+AGENTS.local.md
+**/AGENTS.local.md
+CLAUDE.local.md
+**/CLAUDE.local.md
+EOF
+```
+
+### 3. Create Your Context File
 
 Create a context file (AGENTS.md or CLAUDE.md) at the root of your repo to give AI agents context about your infrastructure:
+
+(If you used the interactive setup from the template README, you can skip this step.)
 
 ```bash
 # Use AGENTS.md for tool-agnostic naming, or CLAUDE.md if you prefer
@@ -37,11 +67,13 @@ cat > AGENTS.md << 'EOF'
 ## Important Constraints
 
 - Never run terraform apply - all changes go through PR workflow
+- Never run helm install/upgrade - all deployments go through GitOps
 - [Add your team-specific rules here]
 
 ## File Structure
 
 - `modules/` - Reusable terraform modules
+- `charts/` - Helm charts
 - `environments/` - Per-environment configurations
 - [Describe your actual structure]
 
@@ -54,130 +86,76 @@ EOF
 
 Customize this for your actual infrastructure. AI agents read this file to understand your repo. See [DEPLOYMENT.md](./docs/DEPLOYMENT.md#repository-structures-and-context-files) for nested context file patterns in monorepos.
 
-### 3. Verify Hook Files Are in Place
+### 4. Verify Hook Files Are in Place
 
 ```bash
 ls -la .claude/
 # Should see: hooks/, docs/, settings.json
 ```
 
-### 4. Test the Hooks
+### 5. Test the Hooks
 
 ```bash
 # Run automated tests
-chmod +x .claude/docs/test-hooks.sh
-./.claude/docs/test-hooks.sh
+chmod +x .claude/hooks/*.py
+pytest .claude/hooks/
 ```
 
-Expected output:
+Expected results:
 ```
-PASS: terraform apply blocked
-PASS: terraform plan prompts for approval
-PASS: Non-terraform commands allowed
-PASS: Audit log created
+test_terraform_validator.py - all tests pass
+test_helm_validator.py - all tests pass
 ```
 
-### 5. Try It Out
+Key behaviors verified:
+- `terraform apply` is blocked
+- `terraform plan` prompts for approval
+- `helm install` is blocked
+- `helm template` prompts for approval
+- Non-terraform/helm commands pass through
+- Audit logs are created
+
+### 6. Try It Out
 
 ```bash
 # Start Claude Code in this repo
 claude
 ```
 
-Then in Claude:
+**Test terraform hooks:**
 ```
 You: "Can you run terraform validate?"
 ```
-
 You should see a prompt asking for approval. Type `y` to approve.
 
-Then try:
 ```
 You: "Can you run terraform apply?"
 ```
-
 This should be **blocked** with an error message.
 
-## How to Use
-
-### Good Use Cases
+**Test helm hooks:**
+```
+You: "Can you run helm lint on the chart?"
+```
+You should see a prompt asking for approval. Type `y` to approve.
 
 ```
-"Show me all GKE clusters in this repo"
-"Add a new node pool with these specs: [...]"
-"Run terraform plan to check what would change"
-"Fix this terraform validation error: [paste error]"
-"What IAM roles are granted in the prod project?"
+You: "Can you run helm install my-release ./chart?"
 ```
-
-### What Claude CANNOT Do
-
-```
-"Run terraform apply"         # Blocked - use PR workflow
-"Run terraform destroy"       # Blocked - extremely dangerous
-"Apply these changes to prod" # Blocked - must go through review
-```
-
-### Your Workflow
-
-1. **Ask Claude** to help write or modify terraform code
-2. **Review** the code changes Claude makes
-3. **Approve** terraform plan when prompted (if changes look good)
-4. **Commit** the changes yourself
-5. **Create PR** following normal workflow
-6. **Apply** via your standard process (Atlantis, CI/CD, etc.)
-
-**You remain in control.** Claude is your intern, not your replacement.
-
-## View Audit Logs
-
-```bash
-# See recent terraform commands
-tail -10 .claude/audit/terraform.log | jq .
-
-# See only blocked commands
-cat .claude/audit/terraform.log | jq 'select(.decision == "BLOCKED")'
-```
-
-## Full Documentation
-
-- **[README.md](./docs/README.md)** - Complete usage guide for your team
-- **[TESTING.md](./docs/TESTING.md)** - Testing procedures and troubleshooting
-- **[DEPLOYMENT.md](./docs/DEPLOYMENT.md)** - How to roll out to other repos
+This should be **blocked** with an error message.
 
 ## Need Help?
 
 **Common issues:**
-- "Hooks aren't running" → Check Python 3 is installed, restart Claude session
-- "Permission denied" → Run `chmod +x .claude/hooks/*.py`
-- "Terraform commands fail" → Ensure you're authenticated to GCP: `gcloud auth login`
+- "Hooks aren't running" -- Check Python 3 is installed, restart Claude session
+- "Permission denied" -- Run `chmod +x .claude/hooks/*.py`
+- "Terraform commands fail" -- Ensure you're authenticated to GCP: `gcloud auth login`
 
 **Still stuck?** See [TESTING.md - Troubleshooting](./docs/TESTING.md#common-issues-and-solutions)
 
-## FAQ
+## Next Steps
 
-**Q: What about my shell alias `alias tf=terraform`?**
-
-A: Shell aliases don't work in subprocess calls (which is how Claude Code runs commands), so they won't bypass these hooks. If you use a wrapper **script** (like `~/bin/tf`), add it to the validator - see [README.md - Custom Terraform Wrapper Scripts](./docs/README.md#custom-terraform-wrapper-scripts).
-
-**Q: Can I temporarily disable the hooks?**
-
-A: Yes, rename `.claude/settings.json` to `.claude/settings.json.disabled` and restart your Claude session. Rename it back to re-enable.
-
-**Q: What if I need to run terraform apply locally?**
-
-A: You still can! The hooks only block Claude, not you. Run `terraform apply` directly in your terminal (not through Claude).
-
-## Quick Reference
-
-| What You Want | What Happens |
-|---------------|--------------|
-| Add new terraform resource | Claude writes code, you approve plan, you commit & PR |
-| Run terraform plan | Prompted for approval, runs if you approve |
-| Run terraform apply | **BLOCKED** - use normal workflow instead |
-| Debug plan errors | Claude reads files, suggests fixes, you approve changes |
-| Understand existing infra | Claude navigates code, no terraform commands needed |
-
----
-
-**Bottom line:** Use Claude to work faster and smarter, but you always maintain control over what actually runs.
+- **[Team Usage Guide](./docs/README.md)** -- Workflows, blocked/approved command reference, troubleshooting, FAQ
+- **[Testing Guide](./docs/TESTING.md)** -- Detailed testing procedures
+- **[Deployment Guide](./docs/DEPLOYMENT.md)** -- Rolling out hooks to multiple repos
+- **[Permissions Model](./docs/PERMISSIONS.md)** -- Layered security: hooks, IAM, CI/CD, RBAC
