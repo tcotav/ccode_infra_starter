@@ -1,17 +1,17 @@
 # Using Claude Code with Infrastructure Repos
 
-A production-ready pattern for safely using Claude Code with terraform and other infrastructure tools in large repositories.
+A starter template for teams using Claude Code with terraform and Helm in GCP infrastructure. Copy this into your repo and start working safely.
+
+Template repository -- copy `.claude/` to your infrastructure repo to get started. For team usage after installation, see the [Team Usage Guide](.claude/docs/README.md).
 
 ## What This Does
 
 Provides **safety guardrails** that allow SRE teams to use Claude Code for terraform development while maintaining existing change management processes.
 
-**Key Features:**
-- Blocks dangerous operations (`terraform apply`, `destroy`, `import`)
-- Prompts for explicit approval on all terraform commands
-- Creates audit trail of all operations
-- Works with terraform aliases and wrapper scripts
-- Per-repository configuration
+- **Blocks dangerous operations** -- `terraform apply`, `destroy`, `helm install`, `upgrade`, `uninstall`, and other cluster-mutating commands are completely forbidden
+- **Prompts for safe operations** -- `terraform plan`, `helm template`, `helm lint`, and other read-only commands require your explicit approval before running
+- **Audit trail** -- Every terraform and helm command attempt is logged with timestamps, decisions, and working directory
+- **Devcontainer** -- Optional but recommended isolated development environment with pinned tool versions and pre-configured tooling
 
 ## Quick Start
 
@@ -32,18 +32,29 @@ chmod +x .claude/hooks/*.py
 ./.claude/docs/test-hooks.sh
 ```
 
-### 3. Customize AGENTS.md for Your Repository
+### 3. Customize Your AGENTS.md file (Optional - see next section)
 
-**Option A: Interactive Setup (Recommended)**
-
-Use Claude Code to customize AGENTS.md through a guided questionnaire:
+### 4. Start Using Claude Code
 
 ```bash
 # Start Claude Code
 claude
 ```
 
-Then paste this prompt:
+Ask Claude to help with terraform or Helm:
+- "Add a new GKE node pool with these specs: ..."
+- "Run terraform plan to check what would change"
+- "Lint the staging Helm chart and show me any errors"
+- "Render the app chart templates with production values"
+
+Dangerous commands are blocked automatically. Safe commands prompt for your approval.
+
+## Customize with Claude Code
+
+Claude Code reads [AGENTS.md](./AGENTS.md) to understand your infrastructure, so customizing it makes Claude more effective at helping with your specific repo.
+
+**Interactive setup (recommended):** Start Claude Code in your repo and paste this prompt:
+
 ```
 I've just installed the Claude Code terraform safety hooks in this repository.
 Help me customize the AGENTS.md file for my team by asking me questions about:
@@ -58,23 +69,7 @@ When you have enough information, show me a draft of the customized AGENTS.md
 sections for my review before making any changes.
 ```
 
-Claude will guide you through questions and customize the file with your specific infrastructure details.
-
-**Option B: Manual Editing**
-
-```bash
-# Edit AGENTS.md directly
-vim AGENTS.md  # or use your preferred editor
-```
-
-AGENTS.md has a clear dividing line separating template content from repository-specific customizations. Add your details in the "REPOSITORY-SPECIFIC CONTEXT" section (below the dividing line):
-
-- What infrastructure this repo manages (GKE clusters, Cloud SQL, networking, etc.)
-- Which environments (dev, staging, prod)
-- Team conventions and approval requirements
-- Links to runbooks or architecture docs
-
-This structure allows you to pull template updates from this repository while preserving your customizations. See the "Maintaining This File" section in AGENTS.md for details on updating from upstream.
+Claude will guide you through questions and customize the file with your specific infrastructure details. All customizations go in the "REPOSITORY-SPECIFIC CONTEXT" section of AGENTS.md, preserving the template content above it for future updates. Add bullet points as is appropriate for your repo.
 
 **Note:** This repo uses AGENTS.md (with CLAUDE.md as a symlink) to support multiple AI coding agents. You can use either naming convention in your repos. See [DEPLOYMENT.md](.claude/docs/DEPLOYMENT.md#step-2a-interactive-customization-with-claude-code-recommended) for details on the interactive setup.
 
@@ -524,6 +519,5 @@ cat .claude/audit/terraform-$(date +%Y-%m-%d).log | jq 'select(.decision == "BLO
 
 ## Credits
 
-Created for SRE teams managing terraform infrastructure with Claude Code.
+Built for SRE teams managing infrastructure with Claude Code. Safety, auditability, and team confidence as core principles.
 
-Built with safety, auditability, and team confidence as core principles.
