@@ -1,51 +1,57 @@
-# Using Claude Code with Infrastructure Repos
+# Claude Code Infrastructure Starter
 
-A production-ready pattern for safely using Claude Code with terraform and other infrastructure tools in large repositories.
+Template repository -- copy `.claude/` to your infrastructure repo to get started. For team usage after installation, see the [Team Usage Guide](.claude/docs/README.md).
+
+A starter template for teams using Claude Code with terraform and Helm in GCP infrastructure. Copy this into your repo and start working safely.
 
 ## What This Does
 
-Provides **safety guardrails** that allow SRE teams to use Claude Code for terraform development while maintaining existing change management processes.
+Provides **safety hooks** for Claude Code that protect your infrastructure workflows:
 
-**Key Features:**
-- Blocks dangerous operations (`terraform apply`, `destroy`, `import`)
-- Prompts for explicit approval on all terraform commands
-- Creates audit trail of all operations
-- Works with terraform aliases and wrapper scripts
-- Per-repository configuration
+- **Blocks dangerous operations** -- `terraform apply`, `destroy`, `helm install`, `upgrade`, `uninstall`, and other cluster-mutating commands are completely forbidden
+- **Prompts for safe operations** -- `terraform plan`, `helm template`, `helm lint`, and other read-only commands require your explicit approval before running
+- **Audit trail** -- Every terraform and helm command attempt is logged with timestamps, decisions, and working directory
+- **Devcontainer** -- Optional isolated development environment with pinned tool versions and pre-configured tooling
 
 ## Quick Start
 
-### 1. Copy to Your Terraform Repository
+### 1. Copy to Your Repository
 
 ```bash
-# In your terraform repo
-git clone https://github.com/your-org/moz-tf-ccode.git /tmp/tf-hooks
-cp -r /tmp/tf-hooks/.claude .
-cp /tmp/tf-hooks/.gitignore .gitignore  # Or merge if you have one
+git clone https://github.com/tcotav/ccode_infra_starter.git /tmp/infra-hooks
+cp -r /tmp/infra-hooks/.claude .
+cp /tmp/infra-hooks/.gitignore .gitignore  # Or merge if you have one
 ```
 
 ### 2. Test the Hooks
 
 ```bash
-# Run automated tests
 chmod +x .claude/hooks/*.py
-./.claude/docs/test-hooks.sh
+pytest .claude/hooks/
 ```
 
-### 3. Customize AGENTS.md for Your Repository
-
-**Option A: Interactive Setup (Recommended)**
-
-Use Claude Code to customize AGENTS.md through a guided questionnaire:
+### 3. Start Using Claude Code
 
 ```bash
-# Start Claude Code
 claude
 ```
 
-Then paste this prompt:
+Ask Claude to help with terraform or Helm:
+- "Add a new GKE node pool with these specs: ..."
+- "Run terraform plan to check what would change"
+- "Lint the staging Helm chart and show me any errors"
+- "Render the app chart templates with production values"
+
+Dangerous commands are blocked automatically. Safe commands prompt for your approval.
+
+## Customize with Claude Code
+
+Claude Code reads `AGENTS.md` to understand your infrastructure, so customizing it makes Claude more effective at helping with your specific repo.
+
+**Interactive setup (recommended):** Start Claude Code in your repo and paste this prompt:
+
 ```
-I've just installed the Claude Code terraform safety hooks in this repository.
+I've just installed the Claude Code infrastructure safety hooks in this repository.
 Help me customize the AGENTS.md file for my team by asking me questions about:
 
 - The infrastructure this repository manages
@@ -58,38 +64,9 @@ When you have enough information, show me a draft of the customized AGENTS.md
 sections for my review before making any changes.
 ```
 
-Claude will guide you through questions and customize the file with your specific infrastructure details.
+Claude will guide you through questions and customize the file with your specific infrastructure details. All customizations go in the "REPOSITORY-SPECIFIC CONTEXT" section of AGENTS.md, preserving the template content above it for future updates.
 
-**Option B: Manual Editing**
-
-```bash
-# Edit AGENTS.md directly
-vim AGENTS.md  # or use your preferred editor
-```
-
-AGENTS.md has a clear dividing line separating template content from repository-specific customizations. Add your details in the "REPOSITORY-SPECIFIC CONTEXT" section (below the dividing line):
-
-- What infrastructure this repo manages (GKE clusters, Cloud SQL, networking, etc.)
-- Which environments (dev, staging, prod)
-- Team conventions and approval requirements
-- Links to runbooks or architecture docs
-
-This structure allows you to pull template updates from this repository while preserving your customizations. See the "Maintaining This File" section in AGENTS.md for details on updating from upstream.
-
-**Note:** This repo uses AGENTS.md (with CLAUDE.md as a symlink) to support multiple AI coding agents. You can use either naming convention in your repos. See [DEPLOYMENT.md](.claude/docs/DEPLOYMENT.md#step-2a-interactive-customization-with-claude-code-recommended) for details on the interactive setup.
-
-### 4. Start Using Claude Code
-
-```bash
-claude
-```
-
-Ask Claude to help with terraform:
-- "Add a new GKE node pool with these specs: ..."
-- "Run terraform plan to check what would change"
-- "Fix this validation error: [paste error]"
-
-Dangerous commands are blocked automatically. Safe commands prompt for your approval.
+**Manual editing:** Edit `AGENTS.md` directly. Add your details below the "REPOSITORY-SPECIFIC CONTEXT" dividing line -- infrastructure overview, environments, team conventions, and deployment workflow.
 
 ## Philosophy: LLM as Intern
 
@@ -103,18 +80,34 @@ Claude Code is your augment, not your replacement. Think of the LLM as an intern
 
 These commands are completely forbidden and will never execute:
 
+### Terraform
+
 ```bash
 terraform apply          # Must go through PR workflow
 terraform destroy        # Extremely dangerous
 terraform import         # Modifies state
 terraform state rm/mv    # State manipulation
+terraform state push/pull # State manipulation
 terraform taint/untaint  # Affects future applies
 terraform force-unlock   # Breaks locking safety
 ```
 
+### Helm
+
+```bash
+helm install      # Deploys to cluster
+helm upgrade      # Modifies cluster state
+helm uninstall    # Removes releases
+helm delete       # Same as uninstall
+helm rollback     # Reverts releases
+helm test         # Runs tests in cluster
+```
+
 ## What Requires Approval
 
-All other terraform commands prompt before execution:
+All other terraform and helm commands prompt before execution:
+
+### Terraform
 
 ```bash
 terraform plan -lock=false   # Primary use case
@@ -125,35 +118,26 @@ terraform state list/show    # Read-only state view
 terraform output             # View outputs
 ```
 
-## Documentation
+### Helm
 
-- **[Quick Start Guide](.claude/QUICKSTART.md)** - Get started in 5 minutes
-- **[Usage Guide](.claude/docs/README.md)** - Comprehensive documentation for teams
-- **[Testing Guide](.claude/docs/TESTING.md)** - How to test and troubleshoot
-- **[Deployment Guide](.claude/docs/DEPLOYMENT.md)** - Rolling out to multiple repos
-- **[AGENTS.md](AGENTS.md)** - Project context for AI coding agents (example for your repos, also accessible as CLAUDE.md)
+```bash
+helm template <chart>       # Render templates locally (primary use case)
+helm lint <chart>           # Validate chart structure
+helm dependency update      # Update chart dependencies
+helm package <chart>        # Package chart for distribution
+helm show values <chart>    # Display default values
+```
 
 ## How It Works
 
-### Technical Implementation
+Four hooks in `.claude/hooks/` enforce safety:
 
-The hooks use Claude Code's native hook system:
+1. **terraform-validator.py** -- Pre-execution hook that blocks dangerous terraform commands and prompts for approval on safe ones
+2. **terraform-logger.py** -- Post-execution hook that records terraform command results to the audit trail
+3. **helm-validator.py** -- Pre-execution hook that blocks cluster-mutating helm commands and prompts for approval on local dev commands
+4. **helm-logger.py** -- Post-execution hook that records helm command results to the audit trail
 
-1. **Pre-execution validation** (`.claude/hooks/terraform-validator.py`)
-   - Intercepts bash commands before Claude runs them
-   - Checks against blocked command patterns
-   - Prompts user for approval on terraform commands
-   - Blocks execution if command is forbidden
-
-2. **Post-execution logging** (`.claude/hooks/terraform-logger.py`)
-   - Records command results to audit trail
-   - Captures timestamps, exit codes, success/failure
-   - Logs stored in `.claude/audit/terraform.log` (gitignored)
-
-3. **Hook configuration** (`.claude/settings.json`)
-   - Defines which hooks run and when
-   - Committed to git for team consistency
-   - Can be customized per repository
+Configured in `.claude/settings.json`, which defines which hooks run at `PreToolUse` and `PostToolUse` stages.
 
 ### Why Hooks, Not Prompts?
 
@@ -163,305 +147,74 @@ Hooks provide **technical enforcement** rather than relying on Claude's behavior
 - Works even if Claude "forgets" the rules
 - Auditable and deterministic
 
-### Defense in Depth: Isolation Layers
-
-The safety architecture uses multiple layers of protection when AI assists with infrastructure:
-
-```mermaid
-graph TB
-    User["User (You)<br/>Reviews & Approves"]
-    Host["Host Machine<br/>Your laptop/workstation"]
-    Container["Docker Container<br/>Isolated environment"]
-    Claude["Claude Code<br/>AI assistant"]
-    PreHook["Pre-execution Hook<br/>terraform-validator.py"]
-    PostHook["Post-execution Hook<br/>terraform-logger.py"]
-    TF["Terraform<br/>Infrastructure changes"]
-
-    User -->|Interacts with| Claude
-    Claude -->|Runs in| Container
-    Container -->|Isolated from| Host
-    Claude -->|Attempts command| PreHook
-    PreHook -->|BLOCK| User
-    PreHook -->|PROMPT| User
-    User -->|Approve/Deny| PreHook
-    PreHook -->|ALLOW| TF
-    TF -->|Executes in| Container
-    TF -->|Result| PostHook
-    PostHook -->|Audit log| Container
-
-    style User fill:#e1f5ff
-    style Container fill:#fff4e1
-    style PreHook fill:#ffe1e1
-    style TF fill:#e1ffe1
-    style PostHook fill:#f0e1ff
-```
-
-**Key Protection Layers:**
-1. **Host Isolation** - Container boundary prevents AI commands from affecting your host machine
-2. **Hook Validation** - Pre-execution hook blocks/prompts before any terraform command runs
-3. **User Control** - You approve every action; AI cannot proceed without permission
-4. **Audit Trail** - Post-execution hook logs all attempts for compliance and review
-
-This multi-layered approach means even if one layer fails, others provide protection.
-
-## Isolated Development Environment (Recommended)
-
-### Why Devcontainer for AI-Assisted Infrastructure
-
-When using AI coding agents with terraform, the devcontainer provides critical isolation and consistency:
-
-**Safety Through Isolation**
-- AI-executed commands run in container, not on your host machine
-- Container boundary provides additional protection layer beyond hooks
-- Filesystem operations are sandboxed to container workspace
-- Can destroy/rebuild container if AI operations cause issues
-- Network policies can restrict container's outbound connections
-
-**Consistency Across Team**
-- Everyone uses identical tool versions (terraform, gcloud, Python)
-- Eliminates "works on my machine" issues
-- Hooks behave identically across all team members
-- No manual installation of 10+ CLI tools
-
-**Complete SRE Toolset**
-- Pre-installed: terraform 1.14.3, tflint, terraform-docs, gcloud, kubectl
-- Quality tools: shellcheck, pre-commit, gitleaks, bat, ripgrep, yq
-- VSCode extensions auto-configured for terraform and Python
-- Auto-formatting enabled for all relevant file types
-
-**Security Built-In**
-- gitleaks scanner prevents accidentally committing secrets
-- Pre-commit framework for additional safeguards
-- Isolated environment with network controls
-- All hook scripts ready to run immediately
-
-### Using the Devcontainer with VSCode
-
-**Prerequisites:**
-- Container runtime (Docker, Podman, Rancher Desktop, etc.) installed and running
-- VSCode with "Dev Containers" extension
-
-**Quick start:**
-
-1. Open this repository in VSCode
-2. Click the blue "Reopen in Container" prompt, or
-3. Command palette: "Dev Containers: Reopen in Container"
-
-**First build takes a few minutes. Subsequent starts are fast (cached).**
-
-Once running:
-- All tools are ready immediately
-- Claude Code extension runs in container context
-- Hooks execute in container Python environment
-- Terraform commands execute in isolated container
-
-### Using the Dockerfile Without VSCode
-
-If you're not using VSCode, you can build and use the Docker image directly:
-
-```bash
-# Build the image
-cd .devcontainer
-docker build -t terraform-sre:local .
-
-# Run interactive shell in container
-docker run -it --rm \
-  -v $(pwd):/workspace \
-  -w /workspace \
-  --cap-add=NET_ADMIN \
-  --cap-add=NET_RAW \
-  terraform-sre:local /bin/zsh
-
-# Inside the container, hooks work the same way
-terraform plan
-```
-
-**Note:** When using the Dockerfile directly, you'll need to manually configure credential mounting and environment variables that devcontainer.json normally handles.
-
-### Devcontainer Architecture
-
-The devcontainer complements the hook system by adding a process-level isolation layer:
-
-**Without devcontainer:**
-```
-Your host machine → Claude Code → Hooks → Terraform
-```
-
-**With devcontainer (recommended):**
-```
-Your host machine → Container boundary → Claude Code → Hooks → Terraform
-```
-
-The container provides:
-- Filesystem isolation (container can't modify host)
-- Network isolation (optional restrictions on outbound calls)
-- Process isolation (can kill container if needed)
-- Version pinning (same terraform/Python for everyone)
-
-**What this protects against:**
-- Accidental file modifications outside your workspace
-- AI mistakes that could affect your host system
-- Unintended command execution impacting local environment
-- Version inconsistencies across team members
-
-**What this does NOT protect against:**
-- Malicious code intentionally designed to escape containers
-- Determined attackers exploiting container escape vulnerabilities
-- Social engineering or credential theft
-- Bypassing IAM permissions or cloud provider security
-
-**Bottom line:** This is an operational safety layer for AI-assisted development, not a security boundary against malicious actors. Your existing security controls (IAM, state locking, PR reviews) remain essential.
-
-### Alternative: Local Installation
-
-If you prefer not to use devcontainer, install these tools locally:
-
-```bash
-# macOS
-brew install python3 terraform tflint terraform-docs gcloud kubectl
-
-# Ubuntu/Debian
-apt-get install python3 python3-pip
-# Then install terraform and cloud tools per vendor docs
-```
-
-Ensure Python 3 is available for the hook scripts. Note that tool versions may vary across team members.
-
-### Complete Documentation
-
-See [.devcontainer/README.md](.devcontainer/README.md) for:
-- Complete tool inventory and versions
-- Customization options (adding tools, changing versions)
-- Organizational deployment patterns
-- Credential management approaches
-- Troubleshooting guide
-- Pre-commit integration examples
-
 ## Repository Structure
 
 ```
 .claude/
 ├── settings.json              # Hook configuration (committed)
 ├── hooks/
-│   ├── terraform-validator.py # Pre-execution validation
-│   └── terraform-logger.py    # Post-execution logging
+│   ├── terraform-validator.py # Pre-execution validation for terraform
+│   ├── terraform-logger.py    # Post-execution logging for terraform
+│   ├── helm-validator.py      # Pre-execution validation for helm
+│   └── helm-logger.py         # Post-execution logging for helm
 ├── docs/
-│   ├── README.md              # Main usage guide
+│   ├── README.md              # Team usage guide
 │   ├── TESTING.md             # Testing procedures
-│   └── DEPLOYMENT.md          # Multi-repo rollout
-└── QUICKSTART.md              # 5-minute getting started
+│   ├── DEPLOYMENT.md          # Multi-repo rollout guide
+│   └── PERMISSIONS.md         # Layered permissions model
+├── audit/
+│   ├── terraform-YYYY-MM-DD.log  # Terraform audit trail (gitignored)
+│   └── helm-YYYY-MM-DD.log       # Helm audit trail (gitignored)
+└── QUICKSTART.md              # Getting started guide
 
 .devcontainer/
 ├── devcontainer.json          # VSCode devcontainer config
-├── Dockerfile                 # Container with all SRE tools
+├── Dockerfile                 # Container with SRE tools
 ├── init-firewall.sh           # Network configuration script
-└── README.md                  # Complete devcontainer documentation
+└── README.md                  # Devcontainer documentation
 
-.gitignore                     # Excludes audit logs
+.gitignore                     # Excludes audit logs and local settings
 AGENTS.md                      # Project context for AI coding agents
 CLAUDE.md -> AGENTS.md         # Symlink for backwards compatibility
 README.md                      # This file
 ```
 
-## Customization
+## Devcontainer
 
-### Adding Custom Terraform Wrapper Scripts
+An optional isolated development environment is included in `.devcontainer/`. It provides:
 
-If your team uses wrapper scripts (like `tfwrapper` in `$PATH`), add them to the validator:
+- Container boundary between AI-executed commands and your host machine
+- Pinned tool versions (terraform, helm, gcloud, kubectl, tflint, etc.)
+- Pre-configured VSCode extensions for terraform and Python
+- Security tooling (gitleaks, pre-commit, shellcheck)
 
-Edit `.claude/hooks/terraform-validator.py`:
+To use it: open this repo in VSCode and click "Reopen in Container", or use Command Palette: "Dev Containers: Reopen in Container".
 
-```python
-# Line 39
-TF_COMMAND = r"\b(terraform|tf|tform|tfwrapper)\b"
+When running terraform or helm commands outside the devcontainer, hooks display a non-blocking warning encouraging its use.
+
+See [.devcontainer/README.md](.devcontainer/README.md) for complete documentation including tool inventory, customization, credential management, and troubleshooting.
+
+## Documentation
+
+- **[Quick Start Guide](.claude/QUICKSTART.md)** -- Post-install setup and verification
+- **[Team Usage Guide](.claude/docs/README.md)** -- Authoritative usage reference (workflows, commands, troubleshooting, FAQ)
+- **[Testing Guide](.claude/docs/TESTING.md)** -- Testing procedures and troubleshooting
+- **[Deployment Guide](.claude/docs/DEPLOYMENT.md)** -- Multi-repo rollout for platform engineers
+- **[Permissions Model](.claude/docs/PERMISSIONS.md)** -- Layered security: hooks, IAM, CI/CD, RBAC
+- **[AGENTS.md](AGENTS.md)** -- Project context for AI coding agents (example for your repos)
+
+## Example Workflows
+
+### Terraform: Add a GCP Cloud SQL Instance
+
 ```
-
-**Note:** Shell aliases (like `alias tf=terraform`) don't need configuration. They don't work in subprocess calls, so they can't bypass hooks anyway.
-
-### Managing Hook Customizations
-
-If you customize the hooks for your organization:
-
-**Track your changes:**
-- Document customizations in comments within the hook files
-- Consider maintaining a `CUSTOMIZATIONS.md` file listing your changes
-- Use git to track changes: `git log .claude/hooks/`
-
-**Upgrading hooks:**
-- When this project releases new hook versions, you'll need to manually merge changes
-- Keep your customizations minimal to simplify updates
-- Consider contributing broadly-useful customizations back to this project
-
-**Multi-repository consistency:**
-- Decide if customizations should be per-repo or organization-wide
-- For org-wide rules, maintain a canonical hooks repository and copy to other repos
-- Document the process for propagating hook updates across your repositories
-
-This is an organizational problem that varies by team structure. Choose an approach that fits your workflow.
-
-### Per-Environment Rules
-
-Different repos can have different rules:
-- Dev repos: More permissive (allow terraform apply with extra confirmation)
-- Prod repos: Stricter (additional blocked commands)
-
-See [Deployment Guide - Customization](.claude/docs/DEPLOYMENT.md#customization-per-repository) for details.
-
-## Requirements
-
-- **Python 3.x** - For hook scripts (included in devcontainer)
-- **Claude Code** - [Download here](https://claude.ai/download)
-- **Terraform** - Any version (hooks are terraform-agnostic, devcontainer includes 1.14.3)
-- **GCP authentication** - `gcloud auth login` (for terraform to work)
-- **Container runtime + VSCode Dev Containers extension** - Optional, for isolated development environment (recommended). Supports Docker, Podman, Rancher Desktop, OrbStack, and compatible runtimes
-
-## FAQ
-
-**Q: Can I still run terraform apply manually?**
-
-A: Yes. The hooks only block Claude Code, not you. Run `terraform apply` directly in your terminal.
-
-**Q: What if hooks cause problems?**
-
-A: Temporarily disable by renaming `.claude/settings.json` to `.claude/settings.json.disabled`. Restart Claude session.
-
-**Q: How do I completely disable the devcontainer and hooks?**
-
-A: To remove all safety mechanisms and run Claude Code directly on your host system:
-1. Close VSCode devcontainer (if using)
-2. Reopen repository locally (not in container)
-3. Remove or rename `.claude/settings.json` to disable hooks
-
-**This is not recommended.** You lose both container isolation and hook validation, returning to direct AI command execution on your host machine. Only do this if you've determined the safety mechanisms don't fit your workflow after thorough evaluation.
-
-**Q: Do I need to authenticate to anything?**
-
-A: Just your normal GCP/AWS/etc. authentication for terraform. The hooks themselves require no additional auth.
-
-**Q: Will this work with Atlantis/Terraform Cloud?**
-
-A: Yes. Hooks are for local development only. Your CI/CD pipeline is unchanged.
-
-**Q: How do I use this devcontainer setup in CI/CD?**
-
-A: CI/CD integration is not covered by this project. The devcontainer and hooks are designed for local development workflows with Claude Code. Your CI/CD pipelines (Atlantis, GitLab CI, GitHub Actions, etc.) should continue using their existing terraform execution environments and approval workflows.
-
-**Q: What about kubectl, helm, gcloud commands?**
-
-A: This repo focuses on terraform. You can adapt the pattern for other tools by modifying the hook scripts.
-
-## Example Workflow
-
-```bash
-# 1. Ask Claude to add infrastructure
 You: "Add a new Cloud SQL instance for our staging environment"
 
 Claude: [Writes terraform code]
 
-# 2. Review the code changes
 You: "Looks good. Run terraform plan to verify"
 
-Claude: "I'll run terraform plan -lock=false"
+Claude: "I'll run terraform plan -lock=false to check the changes."
 [PROMPT APPEARS]
 Terraform command requires approval:
   Command: terraform plan -lock=false
@@ -472,58 +225,71 @@ You: y
 
 [Plan output shows the new Cloud SQL instance]
 
-# 3. Commit and create PR
-You: [Handle git operations yourself]
-git add .
-git commit -m "Add staging Cloud SQL instance"
-git push origin feature/staging-cloudsql
-
-# 4. Apply via your standard process
-# (After PR approval, Atlantis/CI applies the changes)
+You: [Commit changes and create PR -- apply happens via CI/CD]
 ```
 
-## Audit Trail
+### Helm: Validate Chart Changes
 
-All terraform command attempts are logged with timestamps. Logs are automatically rotated daily:
+```
+You: "Update the replica count in the app chart values to 5"
 
-```bash
-# View today's commands
-tail -20 .claude/audit/terraform-$(date +%Y-%m-%d).log | jq .
+Claude: [Edits values.yaml]
 
-# View all recent commands across dates
-cat .claude/audit/terraform-*.log | tail -20 | jq .
+You: "Validate the chart"
 
-# See only blocked attempts from today
-cat .claude/audit/terraform-$(date +%Y-%m-%d).log | jq 'select(.decision == "BLOCKED")'
+Claude: "I'll run helm lint and helm template to check the changes."
+[PROMPT APPEARS]
+Helm command requires approval:
+  Command: helm lint ./charts/app
+  Working directory: /path/to/charts
+Allow? (y/n)
 
-# Example log entry
-{
-  "timestamp": "2026-01-27T14:30:15.123456",
-  "command": "terraform plan -lock=false",
-  "decision": "PENDING_APPROVAL",
-  "working_dir": "/Users/you/repos/infra-prod",
-  "reason": "Awaiting user approval"
-}
+You: y
+
+[Lint output, then template rendering shows updated manifests]
+
+You: [Commit changes and create PR -- deployment happens via ArgoCD]
 ```
 
-**Log rotation:** Logs are automatically rotated by date (e.g., `terraform-2026-01-27.log`). Old logs persist for your audit needs and can be archived or deleted based on your retention policy.
+## FAQ
+
+**Q: Can I still run terraform apply / helm install manually?**
+
+A: Yes. The hooks only block Claude Code, not you. Run commands directly in your terminal.
+
+**Q: What if hooks cause problems?**
+
+A: Rename `.claude/settings.json` to `.claude/settings.json.disabled` and restart your Claude session.
+
+**Q: Will this work with Atlantis/Terraform Cloud/ArgoCD?**
+
+A: Yes. Hooks are for local development only. Your CI/CD pipeline is unchanged.
+
+**Q: Can I add hooks for other tools (kubectl, gcloud, etc.)?**
+
+A: Yes. Copy the pattern from `terraform-validator.py` or `helm-validator.py`, create a new validator, and add it to `.claude/settings.json`. The same safety principles apply to any infrastructure tool.
+
+**Q: Do I need to authenticate to anything?**
+
+A: Just your normal GCP/AWS/etc. authentication for terraform. The hooks themselves require no additional auth.
+
+## Requirements
+
+- **Python 3.x** -- For hook scripts (included in devcontainer)
+- **Claude Code** -- [Download here](https://claude.ai/download)
+- **Terraform** -- Any version (hooks are version-agnostic, devcontainer includes 1.14.3)
+- **Helm** -- Any version (hooks are version-agnostic)
+- **GCP authentication** -- `gcloud auth login` (for terraform to work)
+- **Container runtime + VSCode Dev Containers extension** -- Optional, for isolated development environment (recommended)
 
 ## Support
 
-**Questions or issues?**
 - Review the [documentation](.claude/docs/README.md)
 - Check the [troubleshooting guide](.claude/docs/TESTING.md#common-issues-and-solutions)
 - Open an issue on GitHub
 
-**Want to contribute?**
-- Fork this repository
-- Make your changes
-- Submit a pull request
-- See [AGENTS.md](AGENTS.md) for development guidelines
-
+**Want to contribute?** Fork, make changes, submit a pull request. See [AGENTS.md](AGENTS.md) for development guidelines.
 
 ## Credits
 
-Created for SRE teams managing terraform infrastructure with Claude Code.
-
-Built with safety, auditability, and team confidence as core principles.
+Built for SRE teams managing infrastructure with Claude Code. Safety, auditability, and team confidence as core principles.
