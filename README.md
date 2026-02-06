@@ -1,17 +1,21 @@
 # Claude Code Infrastructure Starter
 
-Template repository -- copy `.claude/` to your infrastructure repo to get started. For team usage after installation, see the [Team Usage Guide](.claude/docs/README.md).
-
 A starter template for teams using Claude Code with terraform and Helm in GCP infrastructure. Copy this into your repo and start working safely.
+
+Template repository -- copy `.claude/` to your infrastructure repo to get started. For team usage after installation, see the [Team Usage Guide](.claude/docs/README.md).
 
 ## What This Does
 
-Provides **safety hooks** for Claude Code that protect your infrastructure workflows:
+Provides a starter [AGENTS.md](AGENTS.md) for use with your infrastructure repository.
+
+Also this provides **safety hooks** for Claude Code and that protect your infrastructure workflows:
 
 - **Blocks dangerous operations** -- `terraform apply`, `destroy`, `helm install`, `upgrade`, `uninstall`, and other cluster-mutating commands are completely forbidden
 - **Prompts for safe operations** -- `terraform plan`, `helm template`, `helm lint`, and other read-only commands require your explicit approval before running
 - **Audit trail** -- Every terraform and helm command attempt is logged with timestamps, decisions, and working directory
-- **Devcontainer** -- Optional isolated development environment with pinned tool versions and pre-configured tooling
+- **Devcontainer** -- Optional *but* recommended isolated development environment with pinned tool versions and pre-configured tooling
+
+Additionally, this pattern of **safety hooks** can be extended for other sensitive tooling that your team might use.
 
 ## Quick Start
 
@@ -44,7 +48,7 @@ Ask Claude to help with terraform or Helm:
 
 Dangerous commands are blocked automatically. Safe commands prompt for your approval.
 
-## Customize with Claude Code
+## Customize Starter Repo with Claude Code
 
 Claude Code reads `AGENTS.md` to understand your infrastructure, so customizing it makes Claude more effective at helping with your specific repo.
 
@@ -65,6 +69,8 @@ sections for my review before making any changes.
 ```
 
 Claude will guide you through questions and customize the file with your specific infrastructure details. All customizations go in the "REPOSITORY-SPECIFIC CONTEXT" section of AGENTS.md, preserving the template content above it for future updates.
+
+Customize the prompt to better suite your organization and plans for the repository.
 
 **Manual editing:** Edit `AGENTS.md` directly. Add your details below the "REPOSITORY-SPECIFIC CONTEXT" dividing line -- infrastructure overview, environments, team conventions, and deployment workflow.
 
@@ -190,7 +196,7 @@ An optional isolated development environment is included in `.devcontainer/`. It
 
 To use it: open this repo in VSCode and click "Reopen in Container", or use Command Palette: "Dev Containers: Reopen in Container".
 
-When running terraform or helm commands outside the devcontainer, hooks display a non-blocking warning encouraging its use.
+When running terraform or helm commands outside the devcontainer, hooks display a non-blocking warning for targeted commands run by Claude Code that encourages using the devcontainer.
 
 See [.devcontainer/README.md](.devcontainer/README.md) for complete documentation including tool inventory, customization, credential management, and troubleshooting.
 
@@ -255,7 +261,7 @@ You: [Commit changes and create PR -- deployment happens via ArgoCD]
 
 **Q: Can I still run terraform apply / helm install manually?**
 
-A: Yes. The hooks only block Claude Code, not you. Run commands directly in your terminal.
+A: Yes. The hooks only block Claude Code, not you. Run commands directly in your terminal if your organization doesn't have CICD, if it's a dev environment, etc.
 
 **Q: What if hooks cause problems?**
 

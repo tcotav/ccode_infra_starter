@@ -688,3 +688,21 @@ Start with these safe explorations:
 4. **"Lint the staging chart and show me any errors"**
 
 Remember: You're in control. Claude is your tool, not your replacement.
+
+---
+
+## Other Features to Explore
+
+This repository includes additional Claude Code features you can experiment with:
+
+### Custom Skills
+
+Skills are reusable prompts that extend Claude Code's capabilities. This repo includes an example:
+
+```
+.claude/skills/review/SKILL.md    # PR review skill
+```
+
+**Try it:** Run `/review` in Claude Code to invoke the PR review skill.
+
+Skills can be project-level (shared with team, version-controlled) or personal (`~/.claude/skills/` for use across all your projects). See the [Claude Code documentation](https://docs.anthropic.com/en/docs/claude-code) for more on creating custom skills.
