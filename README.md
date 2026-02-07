@@ -36,7 +36,7 @@ chmod +x .claude/hooks/*.py
 ./.claude/docs/test-hooks.sh
 ```
 
-### 3. Customize Your AGENTS.md file (Optional - see next section)
+### 3. Customize Your AGENTS.md file (Optional - [see next section](#customize-starter-repo-with-claude-code))
 
 ### 4. Start Using Claude Code
 
