@@ -1,4 +1,4 @@
-# Using Claude Code with Infrastructure Repos
+# Claude Code Infrastructure Starter
 
 A starter template for teams using Claude Code with terraform and Helm in GCP infrastructure. Copy this into your repo and start working safely.
 
@@ -6,12 +6,16 @@ Template repository -- copy `.claude/` to your infrastructure repo to get starte
 
 ## What This Does
 
-Provides **safety guardrails** that allow SRE teams to use Claude Code for terraform development while maintaining existing change management processes.
+Provides a starter [AGENTS.md](AGENTS.md) for use with your infrastructure repository.
+
+Also this provides **safety hooks** for Claude Code and that protect your infrastructure workflows:
 
 - **Blocks dangerous operations** -- `terraform apply`, `destroy`, `helm install`, `upgrade`, `uninstall`, and other cluster-mutating commands are completely forbidden
 - **Prompts for safe operations** -- `terraform plan`, `helm template`, `helm lint`, and other read-only commands require your explicit approval before running
 - **Audit trail** -- Every terraform and helm command attempt is logged with timestamps, decisions, and working directory
-- **Devcontainer** -- Optional but recommended isolated development environment with pinned tool versions and pre-configured tooling
+- **Devcontainer** -- Optional *but* recommended isolated development environment with pinned tool versions and pre-configured tooling
+
+Additionally, this pattern of **safety hooks** can be extended for other sensitive tooling that your team might use.
 
 ## Quick Start
 
@@ -49,7 +53,7 @@ Ask Claude to help with terraform or Helm:
 
 Dangerous commands are blocked automatically. Safe commands prompt for your approval.
 
-## Customize with Claude Code
+## Customize Starter Repo with Claude Code
 
 Claude Code reads [AGENTS.md](./AGENTS.md) to understand your infrastructure, so customizing it makes Claude more effective at helping with your specific repo.
 
@@ -84,7 +88,9 @@ Ask Claude to help with terraform:
 - "Run terraform plan to check what would change"
 - "Fix this validation error: [paste error]"
 
-Dangerous commands are blocked automatically. Safe commands prompt for your approval.
+Customize the prompt to better suite your organization and plans for the repository.
+
+**Manual editing:** Edit `AGENTS.md` directly. Add your details below the "REPOSITORY-SPECIFIC CONTEXT" dividing line -- infrastructure overview, environments, team conventions, and deployment workflow.
 
 ## Philosophy: LLM as Intern
 
@@ -366,10 +372,7 @@ If your team uses wrapper scripts (like `tfwrapper` in `$PATH`), add them to the
 
 Edit `.claude/hooks/terraform-validator.py`:
 
-```python
-# Line 39
-TF_COMMAND = r"\b(terraform|tf|tform|tfwrapper)\b"
-```
+When running terraform or helm commands outside the devcontainer, hooks display a non-blocking warning for targeted commands run by Claude Code that encourages using the devcontainer.
 
 **Note:** Shell aliases (like `alias tf=terraform`) don't need configuration. They don't work in subprocess calls, so they can't bypass hooks anyway.
 
@@ -433,7 +436,7 @@ A: To remove all safety mechanisms and run Claude Code directly on your host sys
 
 A: Just your normal GCP/AWS/etc. authentication for terraform. The hooks themselves require no additional auth.
 
-**Q: Will this work with Atlantis/Terraform Cloud?**
+A: Yes. The hooks only block Claude Code, not you. Run commands directly in your terminal if your organization doesn't have CICD, if it's a dev environment, etc.
 
 A: Yes. Hooks are for local development only. Your CI/CD pipeline is unchanged.
 
