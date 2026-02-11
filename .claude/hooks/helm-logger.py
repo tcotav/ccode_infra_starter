@@ -31,6 +31,7 @@ def get_audit_log_path():
     audit_dir = Path(os.environ.get("CLAUDE_PROJECT_DIR", ".")) / ".claude" / "audit"
     return audit_dir / f"helm-{date_str}.log"
 
+
 AUDIT_LOG = get_audit_log_path()
 
 # Helm command pattern
@@ -63,7 +64,7 @@ def log_result(command, cwd, success, exit_code):
         "decision": status,
         "working_dir": cwd,
         "exit_code": exit_code,
-        "success": success
+        "success": success,
     }
 
     try:

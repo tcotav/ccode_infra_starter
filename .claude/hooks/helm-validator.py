@@ -35,6 +35,7 @@ def get_audit_log_path():
     audit_dir = Path(os.environ.get("CLAUDE_PROJECT_DIR", ".")) / ".claude" / "audit"
     return audit_dir / f"helm-{date_str}.log"
 
+
 AUDIT_LOG = get_audit_log_path()
 
 # Helm command name to catch
@@ -71,7 +72,7 @@ def is_in_devcontainer():
     Returns:
         bool: True if IN_DEVCONTAINER environment variable is set to 'true'
     """
-    return os.environ.get('IN_DEVCONTAINER', '').lower() == 'true'
+    return os.environ.get("IN_DEVCONTAINER", "").lower() == "true"
 
 
 def get_container_warning():
@@ -121,7 +122,7 @@ def log_command(command, decision, cwd, reason=""):
         "command": command,
         "decision": decision,
         "working_dir": cwd,
-        "reason": reason
+        "reason": reason,
     }
 
     try:
@@ -168,8 +169,11 @@ def check_command(command, cwd):
     # Check if the command contains blocked subcommand keywords despite not
     # matching the structured block patterns. This catches indirect execution
     # via variables or eval (e.g., subcmd="install"; helm $subcmd).
-    suspicious = [kw for kw in ("install", "upgrade", "uninstall", "delete", "rollback")
-                  if re.search(rf"\b{kw}\b", command, re.IGNORECASE)]
+    suspicious = [
+        kw
+        for kw in ("install", "upgrade", "uninstall", "delete", "rollback")
+        if re.search(rf"\b{kw}\b", command, re.IGNORECASE)
+    ]
 
     # Get container warning (empty string if in container)
     container_warning = get_container_warning()
@@ -185,8 +189,12 @@ def check_command(command, cwd):
             f"blocked operation. Review the full command carefully before approving."
             f"{container_warning}"
         )
-        log_command(command, "PENDING_APPROVAL_SUSPICIOUS", cwd,
-                    f"Contains blocked keywords: {keywords}")
+        log_command(
+            command,
+            "PENDING_APPROVAL_SUSPICIOUS",
+            cwd,
+            f"Contains blocked keywords: {keywords}",
+        )
     else:
         reason = (
             f"Helm command requires approval:\n\n"
@@ -226,7 +234,7 @@ def main():
         "hookSpecificOutput": {
             "hookEventName": "PreToolUse",
             "permissionDecision": decision,
-            "permissionDecisionReason": reason
+            "permissionDecisionReason": reason,
         }
     }
 
