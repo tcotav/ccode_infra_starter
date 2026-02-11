@@ -640,6 +640,121 @@ Run these tests before committing any changes to the hook scripts.
 
 ---
 
+## Skill Smoke Tests
+
+Skills are markdown prompts (not executable code), so they require manual verification rather than automated tests. Run through these checklists after modifying any skill.
+
+---
+
+### Skill: `/tf-plan`
+
+**File:** `.claude/skills/tf-plan/SKILL.md`
+
+#### Test S1: Directory Auto-Detection
+
+```
+You: /tf-plan
+```
+
+**Expected:** Claude finds the nearest directory containing `.tf` files and uses it as the target. If multiple directories match, Claude asks which one to use.
+
+#### Test S2: Explicit Directory Argument
+
+```
+You: /tf-plan testapp1/tf
+```
+
+**Expected:** Claude uses `testapp1/tf` as the target directory without scanning.
+
+#### Test S3: Init Skip When Already Initialized
+
+**Setup:** Ensure `.terraform/` exists in the target directory (run `terraform init` manually first).
+
+```
+You: /tf-plan testapp1/tf
+```
+
+**Expected:** Claude skips `terraform init` and proceeds directly to `terraform plan -lock=false -no-color`.
+
+#### Test S4: Init Runs When Needed
+
+**Setup:** Remove `.terraform/` from the target directory.
+
+```
+You: /tf-plan testapp1/tf
+```
+
+**Expected:** Claude runs `terraform init -no-color` before running `terraform plan -lock=false -no-color`.
+
+#### Test S5: Plan Output Summary
+
+**Expected:** After plan completes, Claude provides a structured summary listing:
+- Resources to add (with type and name)
+- Resources to change (with what is changing)
+- Resources to destroy (flagged prominently)
+- Or "no changes" if the plan is clean
+
+#### Test S6: Safety Constraints
+
+**Expected:** Claude never runs or suggests `terraform apply` or `terraform destroy`. The safety hooks still trigger for all terraform commands run by the skill.
+
+#### Test S7: Correct Flags
+
+**Expected:** All terraform commands use `-no-color`. Plan uses `-lock=false`.
+
+---
+
+### Skill: `/helm-check`
+
+**File:** `.claude/skills/helm-check/SKILL.md`
+
+#### Test S8: Directory Auto-Detection
+
+```
+You: /helm-check
+```
+
+**Expected:** Claude finds the nearest directory containing `Chart.yaml` and uses it as the target. If multiple charts exist, Claude asks which one to validate.
+
+#### Test S9: Explicit Directory Argument
+
+```
+You: /helm-check testapp1/charts/myapp
+```
+
+**Expected:** Claude uses the specified directory without scanning.
+
+#### Test S10: Dependency Update When Needed
+
+**Setup:** Use a chart with `dependencies:` in `Chart.yaml` but no `charts/` subdirectory.
+
+**Expected:** Claude runs `helm dependency update .` before linting.
+
+#### Test S11: Dependency Skip When Present
+
+**Setup:** Use a chart with dependencies already fetched in `charts/`.
+
+**Expected:** Claude skips `helm dependency update` and proceeds to lint.
+
+#### Test S12: Lint and Template Rendering
+
+**Expected:** Claude runs `helm lint .` followed by `helm template release-name .` and reports:
+- Lint result (pass, warnings, or errors)
+- Rendered resources (types and names)
+- Any warnings or errors
+
+#### Test S13: Values File Awareness
+
+**Setup:** Use a chart directory containing `values.yaml` and `values-prod.yaml`.
+
+**Expected:** Claude renders with default values and mentions the existence of environment-specific values files, offering to render with them.
+
+#### Test S14: Safety Constraints
+
+**Expected:** Claude never runs or suggests `helm install`, `helm upgrade`, `helm uninstall`, `helm rollback`, or `helm delete`. The safety hooks still trigger for all helm commands run by the skill.
+
+---
+
 ## Validation Checklist
 
 Before considering the hooks "production ready":
@@ -659,6 +774,20 @@ Before considering the hooks "production ready":
 - [ ] Helm audit log captures all attempts
 - [ ] Devcontainer warning appears when outside container
 - [ ] No devcontainer warning when inside container
+
+**Skills:**
+- [ ] `/tf-plan` auto-detects terraform directories
+- [ ] `/tf-plan <path>` uses the specified directory
+- [ ] `/tf-plan` skips init when `.terraform/` exists
+- [ ] `/tf-plan` runs init when `.terraform/` is missing
+- [ ] `/tf-plan` uses `-lock=false -no-color` flags
+- [ ] `/tf-plan` summarizes plan output
+- [ ] `/helm-check` auto-detects chart directories
+- [ ] `/helm-check <path>` uses the specified directory
+- [ ] `/helm-check` updates dependencies when needed
+- [ ] `/helm-check` runs lint and template rendering
+- [ ] `/helm-check` notes available values files
+- [ ] Both skills respect safety constraints (hooks still trigger)
 
 **General:**
 - [ ] Automated tests pass: `pytest .claude/hooks/ -v`

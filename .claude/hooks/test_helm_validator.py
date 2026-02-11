@@ -1,6 +1,7 @@
 """Tests for helm-validator.py check_command() logic."""
 
 import importlib.util
+import os
 from pathlib import Path
 from unittest.mock import patch
 
@@ -26,9 +27,22 @@ def _no_audit_log():
         yield
 
 
+@pytest.fixture(autouse=True)
+def _suppress_container_warning():
+    """Set IN_DEVCONTAINER so container warnings don't interfere with assertions."""
+    old = os.environ.get("IN_DEVCONTAINER")
+    os.environ["IN_DEVCONTAINER"] = "true"
+    yield
+    if old is None:
+        del os.environ["IN_DEVCONTAINER"]
+    else:
+        os.environ["IN_DEVCONTAINER"] = old
+
+
 # ---------------------------------------------------------------------------
 # Blocked commands  (decision="deny", should_block=True)
 # ---------------------------------------------------------------------------
+
 
 class TestBlockedCommands:
     """Commands that must be denied outright."""
@@ -100,6 +114,7 @@ class TestBlockedCommands:
 # Prompted commands  (decision="ask", should_block=False)
 # ---------------------------------------------------------------------------
 
+
 class TestPromptedCommands:
     """Safe helm commands that require user approval."""
 
@@ -113,7 +128,9 @@ class TestPromptedCommands:
             pytest.param("helm dependency update .", id="dep-update"),
             pytest.param("helm package .", id="package"),
             pytest.param("helm repo list", id="repo-list"),
-            pytest.param("helm repo add bitnami https://charts.bitnami.com", id="repo-add"),
+            pytest.param(
+                "helm repo add bitnami https://charts.bitnami.com", id="repo-add"
+            ),
             pytest.param("helm search repo mychart", id="search"),
             pytest.param("helm version", id="version"),
             pytest.param("helm env", id="env"),
@@ -133,6 +150,7 @@ class TestPromptedCommands:
 # ---------------------------------------------------------------------------
 # Non-matching commands  (decision="allow", should_block=False)
 # ---------------------------------------------------------------------------
+
 
 class TestNonMatchingCommands:
     """Commands that are not helm-related at all."""
@@ -163,6 +181,7 @@ class TestNonMatchingCommands:
 # Suspicious keyword detection
 # ---------------------------------------------------------------------------
 
+
 class TestSuspiciousKeywords:
     """Indirection patterns that contain blocked keywords without matching
     the structured block patterns."""
@@ -172,7 +191,9 @@ class TestSuspiciousKeywords:
         [
             pytest.param('subcmd="install"; helm $subcmd', id="variable-install"),
             pytest.param('chart="upgrade"; helm $chart', id="variable-upgrade"),
-            pytest.param('action=rollback; helm $action myrelease', id="variable-rollback"),
+            pytest.param(
+                "action=rollback; helm $action myrelease", id="variable-rollback"
+            ),
         ],
     )
     def test_suspicious_warned(self, cmd):
@@ -192,6 +213,7 @@ class TestSuspiciousKeywords:
 # ---------------------------------------------------------------------------
 # False positive resistance
 # ---------------------------------------------------------------------------
+
 
 class TestFalsePositiveResistance:
     """Commands containing blocked keywords in non-subcommand positions
@@ -229,8 +251,8 @@ class TestFalsePositiveResistance:
 # Case insensitivity
 # ---------------------------------------------------------------------------
 
-class TestCaseInsensitivity:
 
+class TestCaseInsensitivity:
     def test_uppercase_blocked(self):
         decision, _, blocked = check_command("HELM INSTALL myrelease", CWD)
         assert decision == "deny"

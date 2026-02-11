@@ -1,6 +1,7 @@
 """Tests for terraform-validator.py check_command() logic."""
 
 import importlib.util
+import os
 from pathlib import Path
 from unittest.mock import patch
 
@@ -26,9 +27,22 @@ def _no_audit_log():
         yield
 
 
+@pytest.fixture(autouse=True)
+def _suppress_container_warning():
+    """Set IN_DEVCONTAINER so container warnings don't interfere with assertions."""
+    old = os.environ.get("IN_DEVCONTAINER")
+    os.environ["IN_DEVCONTAINER"] = "true"
+    yield
+    if old is None:
+        del os.environ["IN_DEVCONTAINER"]
+    else:
+        os.environ["IN_DEVCONTAINER"] = old
+
+
 # ---------------------------------------------------------------------------
 # Blocked commands  (decision="deny", should_block=True)
 # ---------------------------------------------------------------------------
+
 
 class TestBlockedCommands:
     """Commands that must be denied outright."""
@@ -54,7 +68,9 @@ class TestBlockedCommands:
         "cmd",
         [
             pytest.param("terraform state rm aws_instance.foo", id="state-rm"),
-            pytest.param("terraform state mv aws_instance.a aws_instance.b", id="state-mv"),
+            pytest.param(
+                "terraform state mv aws_instance.a aws_instance.b", id="state-mv"
+            ),
             pytest.param("terraform state push", id="state-push"),
             pytest.param("terraform state pull", id="state-pull"),
         ],
@@ -82,7 +98,9 @@ class TestBlockedCommands:
         "cmd",
         [
             pytest.param("terraform -chdir=../prod apply", id="chdir"),
-            pytest.param("terraform -chdir=../prod -no-color apply", id="chdir-nocolor"),
+            pytest.param(
+                "terraform -chdir=../prod -no-color apply", id="chdir-nocolor"
+            ),
             pytest.param("tf -chdir=envs/staging destroy", id="alias-chdir-destroy"),
         ],
     )
@@ -117,6 +135,7 @@ class TestBlockedCommands:
 # Prompted commands  (decision="ask", should_block=False)
 # ---------------------------------------------------------------------------
 
+
 class TestPromptedCommands:
     """Safe terraform commands that require user approval."""
 
@@ -126,7 +145,9 @@ class TestPromptedCommands:
             pytest.param("terraform plan", id="plan"),
             pytest.param("terraform init", id="init"),
             pytest.param("terraform init -no-color", id="init-nocolor"),
-            pytest.param("terraform plan -lock=false -no-color", id="plan-lock-nocolor"),
+            pytest.param(
+                "terraform plan -lock=false -no-color", id="plan-lock-nocolor"
+            ),
             pytest.param("terraform fmt", id="fmt"),
             pytest.param("terraform validate", id="validate"),
             pytest.param("terraform output", id="output"),
@@ -147,6 +168,7 @@ class TestPromptedCommands:
 # ---------------------------------------------------------------------------
 # Non-matching commands  (decision="allow", should_block=False)
 # ---------------------------------------------------------------------------
+
 
 class TestNonMatchingCommands:
     """Commands that are not terraform-related at all."""
@@ -178,6 +200,7 @@ class TestNonMatchingCommands:
 # Suspicious keyword detection
 # ---------------------------------------------------------------------------
 
+
 class TestSuspiciousKeywords:
     """Indirection patterns that contain blocked keywords without matching
     the structured block patterns."""
@@ -185,9 +208,9 @@ class TestSuspiciousKeywords:
     @pytest.mark.parametrize(
         "cmd",
         [
-            pytest.param('cmd=apply; terraform $cmd', id="variable-apply"),
-            pytest.param('terraform $(echo destroy)', id="subshell-destroy"),
-            pytest.param('action=taint; tf $action resource', id="variable-taint"),
+            pytest.param("cmd=apply; terraform $cmd", id="variable-apply"),
+            pytest.param("terraform $(echo destroy)", id="subshell-destroy"),
+            pytest.param("action=taint; tf $action resource", id="variable-taint"),
         ],
     )
     def test_suspicious_warned(self, cmd):
@@ -207,6 +230,7 @@ class TestSuspiciousKeywords:
 # ---------------------------------------------------------------------------
 # False positive resistance
 # ---------------------------------------------------------------------------
+
 
 class TestFalsePositiveResistance:
     """Commands that contain blocked keywords in non-subcommand positions
@@ -235,8 +259,8 @@ class TestFalsePositiveResistance:
 # Case insensitivity
 # ---------------------------------------------------------------------------
 
-class TestCaseInsensitivity:
 
+class TestCaseInsensitivity:
     def test_uppercase_blocked(self):
         decision, _, blocked = check_command("TERRAFORM APPLY", CWD)
         assert decision == "deny"

@@ -24,12 +24,14 @@ import os
 from datetime import datetime
 from pathlib import Path
 
+
 # Audit log location (project-specific, rotated daily)
 def get_audit_log_path():
     """Get dated audit log path for automatic daily rotation."""
     date_str = datetime.now().strftime("%Y-%m-%d")
     audit_dir = Path(os.environ.get("CLAUDE_PROJECT_DIR", ".")) / ".claude" / "audit"
     return audit_dir / f"terraform-{date_str}.log"
+
 
 AUDIT_LOG = get_audit_log_path()
 
@@ -55,7 +57,10 @@ BLOCKED_COMMANDS = [
     (rf"{TF_COMMAND}{TF_FLAGS_GAP}\s+apply\b", "terraform apply"),
     (rf"{TF_COMMAND}{TF_FLAGS_GAP}\s+destroy\b", "terraform destroy"),
     (rf"{TF_COMMAND}{TF_FLAGS_GAP}\s+import\b", "terraform import"),
-    (rf"{TF_COMMAND}{TF_FLAGS_GAP}\s+state\s+(rm|mv|push|pull)\b", "terraform state manipulation (rm/mv/push/pull)"),
+    (
+        rf"{TF_COMMAND}{TF_FLAGS_GAP}\s+state\s+(rm|mv|push|pull)\b",
+        "terraform state manipulation (rm/mv/push/pull)",
+    ),
     (rf"{TF_COMMAND}{TF_FLAGS_GAP}\s+taint\b", "terraform taint"),
     (rf"{TF_COMMAND}{TF_FLAGS_GAP}\s+untaint\b", "terraform untaint"),
     (rf"{TF_COMMAND}{TF_FLAGS_GAP}\s+force-unlock\b", "terraform force-unlock"),
@@ -72,7 +77,7 @@ def is_in_devcontainer():
     Returns:
         bool: True if IN_DEVCONTAINER environment variable is set to 'true'
     """
-    return os.environ.get('IN_DEVCONTAINER', '').lower() == 'true'
+    return os.environ.get("IN_DEVCONTAINER", "").lower() == "true"
 
 
 def get_container_warning():
@@ -122,7 +127,7 @@ def log_command(command, decision, cwd, reason=""):
         "command": command,
         "decision": decision,
         "working_dir": cwd,
-        "reason": reason
+        "reason": reason,
     }
 
     try:
@@ -166,8 +171,11 @@ def check_command(command, cwd):
     # Check if the command contains blocked subcommand keywords despite not
     # matching the structured block patterns. This catches indirect execution
     # via variables or eval (e.g., subcmd="apply"; terraform $subcmd).
-    suspicious = [kw for kw in ("apply", "destroy", "taint", "untaint", "force-unlock")
-                  if re.search(rf"\b{kw}\b", command, re.IGNORECASE)]
+    suspicious = [
+        kw
+        for kw in ("apply", "destroy", "taint", "untaint", "force-unlock")
+        if re.search(rf"\b{kw}\b", command, re.IGNORECASE)
+    ]
 
     # Get container warning (empty string if in container)
     container_warning = get_container_warning()
@@ -183,8 +191,12 @@ def check_command(command, cwd):
             f"blocked operation. Review the full command carefully before approving."
             f"{container_warning}"
         )
-        log_command(command, "PENDING_APPROVAL_SUSPICIOUS", cwd,
-                    f"Contains blocked keywords: {keywords}")
+        log_command(
+            command,
+            "PENDING_APPROVAL_SUSPICIOUS",
+            cwd,
+            f"Contains blocked keywords: {keywords}",
+        )
     else:
         reason = (
             f"Terraform command requires approval:\n\n"
@@ -224,7 +236,7 @@ def main():
         "hookSpecificOutput": {
             "hookEventName": "PreToolUse",
             "permissionDecision": decision,
-            "permissionDecisionReason": reason
+            "permissionDecisionReason": reason,
         }
     }
 

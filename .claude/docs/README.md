@@ -694,12 +694,14 @@ This repository includes additional Claude Code features you can experiment with
 
 ### Custom Skills
 
-Skills are reusable prompts that extend Claude Code's capabilities. This repo includes an example:
+Skills are reusable prompts that extend Claude Code's capabilities. This repo includes:
 
 ```
-.claude/skills/review/SKILL.md    # PR review skill
+.claude/skills/review/SKILL.md       # PR review skill
+.claude/skills/tf-plan/SKILL.md      # Terraform plan dev loop
+.claude/skills/helm-check/SKILL.md   # Helm chart validation
 ```
 
-**Try it:** Run `/review` in Claude Code to invoke the PR review skill.
+**Try it:** Run `/review` to invoke the PR review skill, `/tf-plan` to run the terraform plan workflow, or `/helm-check` to lint and render a Helm chart locally.
 
 Skills can be project-level (shared with team, version-controlled) or personal (`~/.claude/skills/` for use across all your projects). See the [Claude Code documentation](https://docs.anthropic.com/en/docs/claude-code) for more on creating custom skills.

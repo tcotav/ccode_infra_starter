@@ -24,12 +24,14 @@ import re
 from datetime import datetime
 from pathlib import Path
 
+
 # Audit log location (project-specific, rotated daily)
 def get_audit_log_path():
     """Get dated audit log path for automatic daily rotation."""
     date_str = datetime.now().strftime("%Y-%m-%d")
     audit_dir = Path(os.environ.get("CLAUDE_PROJECT_DIR", ".")) / ".claude" / "audit"
     return audit_dir / f"terraform-{date_str}.log"
+
 
 AUDIT_LOG = get_audit_log_path()
 
@@ -63,7 +65,7 @@ def log_result(command, cwd, success, exit_code):
         "decision": status,
         "working_dir": cwd,
         "exit_code": exit_code,
-        "success": success
+        "success": success,
     }
 
     try:
