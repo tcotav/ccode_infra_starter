@@ -31,6 +31,10 @@ You review and approve each action, you are responsible for the work product, yo
 │   ├── terraform-logger.py    # Post-execution logging for terraform
 │   ├── helm-validator.py      # Pre-execution validation for helm
 │   └── helm-logger.py         # Post-execution logging for helm
+├── skills/
+│   ├── tf-plan/               # /tf-plan skill for terraform validation
+│   ├── helm-check/            # /helm-check skill for Helm validation
+│   └── review/                # /review skill for code review
 ├── docs/
 │   ├── README.md              # Main usage guide for SRE teams
 │   ├── TESTING.md             # Testing procedures
@@ -92,7 +96,24 @@ AGENTS.local.md                # Personal preferences (gitignored, optional)
 
 ## Terraform Workflow
 
-### Local Testing Workflow
+### Using the /tf-plan Skill (Recommended)
+
+The easiest way to validate terraform changes is to use the `/tf-plan` skill:
+
+```bash
+/tf-plan [directory]
+```
+
+This skill automatically:
+- Determines the target directory (or prompts if ambiguous)
+- Runs `terraform init -no-color` (if needed)
+- Runs `terraform plan -lock=false -no-color`
+- Provides a structured summary of resources to add/change/destroy
+- Highlights unexpected changes
+
+You can also run the commands manually as described below.
+
+### Local Testing Workflow (Manual)
 
 **Allowed commands for local validation:**
 
@@ -132,7 +153,7 @@ When making terraform changes, follow this lifecycle pattern:
 **2. Ask User to Verify**
 After making changes, always ask the user:
 
-> "Would you like me to test and verify these terraform changes? (This will run `terraform plan` only - no resources will be applied)"
+> "Would you like me to validate these terraform changes? I can run `/tf-plan` to test them (runs `terraform plan` only - no resources will be applied)"
 
 **3. Run Validation (if user approves)**
 
@@ -158,7 +179,25 @@ terraform plan -lock=false -no-color
 
 ## Helm Chart Development Workflow
 
-### Local Validation Workflow
+### Using the /helm-check Skill (Recommended)
+
+The easiest way to validate Helm chart changes is to use the `/helm-check` skill:
+
+```bash
+/helm-check [directory]
+```
+
+This skill automatically:
+- Determines the target chart directory (or prompts if ambiguous)
+- Updates dependencies if needed
+- Runs `helm lint`
+- Renders templates with `helm template`
+- Provides a structured summary of lint results and rendered resources
+- Highlights any issues or warnings
+
+You can also run the commands manually as described below.
+
+### Local Validation Workflow (Manual)
 
 **Allowed commands for local chart development:**
 
@@ -200,7 +239,7 @@ When modifying Helm charts, follow this lifecycle pattern:
 **2. Ask User to Verify**
 After making changes, always ask the user:
 
-> "Would you like me to validate these Helm chart changes? (This will run `helm lint` and `helm template` only - nothing will be deployed)"
+> "Would you like me to validate these Helm chart changes? I can run `/helm-check` to test them (runs `helm lint` and `helm template` only - nothing will be deployed)"
 
 **3. Run Validation (if user approves)**
 
