@@ -106,6 +106,7 @@ The easiest way to validate terraform changes is to use the `/tf-plan` skill:
 
 This skill automatically:
 - Determines the target directory (or prompts if ambiguous)
+- Runs `terraform fmt -recursive` to format code
 - Runs `terraform init -no-color` (if needed)
 - Runs `terraform plan -lock=false -no-color`
 - Provides a structured summary of resources to add/change/destroy

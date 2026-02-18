@@ -8,6 +8,19 @@ Run the terraform plan dev loop for a given directory. Never run `terraform appl
 - Otherwise, look for `.tf` files near the current working context (current directory, parent, or immediate subdirectories).
 - If multiple directories contain `.tf` files and the choice is ambiguous, ask the user which directory to use before proceeding.
 
+## Run Format
+
+Format the terraform code to canonical style:
+
+```bash
+cd <target-directory> && terraform fmt -recursive
+```
+
+Report the results:
+- If files were formatted, list which files were modified
+- If no files needed formatting, note that the code is already properly formatted
+- If there are errors, explain them and suggest fixes
+
 ## Run Init (if needed)
 
 Check if a `.terraform/` directory exists in the target directory.
