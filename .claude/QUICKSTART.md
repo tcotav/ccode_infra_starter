@@ -1,11 +1,12 @@
-# Claude Code Terraform Hooks - Quick Start
+# Claude Code Terraform and Helm Hooks - Quick Start
 
 ## TL;DR
 
-Safety system for using Claude Code with terraform that:
+Safety system for using Claude Code with terraform and Helm that:
 - Blocks `terraform apply`, `destroy`, `import` (must use PR workflow)
-- Prompts for approval on safe commands (`plan`, `validate`, `fmt`, etc.)
-- Logs all terraform operations with timestamps
+- Blocks `helm install`, `upgrade`, `uninstall` (must use GitOps workflow)
+- Prompts for approval on safe commands (`plan`, `validate`, `fmt`, `helm lint`, `helm template`, etc.)
+- Logs all terraform and helm operations with timestamps
 
 ## Installation
 
@@ -65,17 +66,10 @@ ls -la .claude/
 
 ```bash
 # Run automated tests
-chmod +x .claude/docs/test-hooks.sh
-./.claude/docs/test-hooks.sh
+pytest .claude/hooks/ -v
 ```
 
-Expected output:
-```
-PASS: terraform apply blocked
-PASS: terraform plan prompts for approval
-PASS: Non-terraform commands allowed
-PASS: Audit log created
-```
+Expected output shows passing tests for both terraform and helm validators covering blocked commands, prompted commands, and pass-through behavior. See [TESTING.md](./docs/TESTING.md#automated-test-suite) for the full list of what's tested.
 
 ### 5. Try It Out
 
@@ -98,6 +92,18 @@ You: "Can you run terraform apply?"
 
 This should be **blocked** with an error message.
 
+To verify helm hooks:
+```
+You: "Can you run helm lint on the charts directory?"
+```
+
+You should see a prompt asking for approval. Then try:
+```
+You: "Can you run helm install myapp ./charts?"
+```
+
+This should be **blocked** with an error message.
+
 ## How to Use
 
 ### Good Use Cases
@@ -108,24 +114,30 @@ This should be **blocked** with an error message.
 "Run terraform plan to check what would change"
 "Fix this terraform validation error: [paste error]"
 "What IAM roles are granted in the prod project?"
+"Lint this Helm chart and show me any warnings"
+"Render the chart templates with the prod values file"
+"Add a resource limit to this Helm deployment template"
 ```
 
 ### What Claude CANNOT Do
 
 ```
-"Run terraform apply"         # Blocked - use PR workflow
-"Run terraform destroy"       # Blocked - extremely dangerous
-"Apply these changes to prod" # Blocked - must go through review
+"Run terraform apply"              # Blocked - use PR workflow
+"Run terraform destroy"            # Blocked - extremely dangerous
+"Apply these changes to prod"      # Blocked - must go through review
+"Run helm install myapp ./charts"  # Blocked - use GitOps workflow
+"Run helm upgrade myapp ./charts"  # Blocked - use GitOps workflow
+"Run helm uninstall myapp"         # Blocked - use GitOps workflow
 ```
 
 ### Your Workflow
 
-1. **Ask Claude** to help write or modify terraform code
+1. **Ask Claude** to help write or modify terraform or Helm code
 2. **Review** the code changes Claude makes
-3. **Approve** terraform plan when prompted (if changes look good)
+3. **Approve** terraform plan or helm lint/template when prompted (if output looks good)
 4. **Commit** the changes yourself
 5. **Create PR** following normal workflow
-6. **Apply** via your standard process (Atlantis, CI/CD, etc.)
+6. **Apply** via your standard process (Atlantis, CI/CD, ArgoCD, etc.)
 
 **You remain in control.** Claude is your intern, not your replacement.
 
@@ -133,10 +145,16 @@ This should be **blocked** with an error message.
 
 ```bash
 # See recent terraform commands
-tail -10 .claude/audit/terraform.log | jq .
+tail -10 .claude/audit/terraform-$(date +%Y-%m-%d).log | jq .
 
-# See only blocked commands
-cat .claude/audit/terraform.log | jq 'select(.decision == "BLOCKED")'
+# See only blocked terraform commands
+cat .claude/audit/terraform-$(date +%Y-%m-%d).log | jq 'select(.decision == "BLOCKED")'
+
+# See recent helm commands
+tail -10 .claude/audit/helm-$(date +%Y-%m-%d).log | jq .
+
+# See only blocked helm commands
+cat .claude/audit/helm-$(date +%Y-%m-%d).log | jq 'select(.decision == "BLOCKED")'
 ```
 
 ## Full Documentation
@@ -174,9 +192,12 @@ A: You still can! The hooks only block Claude, not you. Run `terraform apply` di
 |---------------|--------------|
 | Add new terraform resource | Claude writes code, you approve plan, you commit & PR |
 | Run terraform plan | Prompted for approval, runs if you approve |
-| Run terraform apply | **BLOCKED** - use normal workflow instead |
+| Run terraform apply | **BLOCKED** - use PR workflow instead |
 | Debug plan errors | Claude reads files, suggests fixes, you approve changes |
-| Understand existing infra | Claude navigates code, no terraform commands needed |
+| Modify a Helm chart | Claude edits templates/values, you approve lint & template, you commit & PR |
+| Run helm lint / helm template | Prompted for approval, runs if you approve |
+| Run helm install / upgrade | **BLOCKED** - use GitOps workflow instead |
+| Understand existing infra | Claude navigates code, no commands needed |
 
 ---
 
