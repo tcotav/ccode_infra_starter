@@ -254,6 +254,21 @@ class TestFalsePositiveResistance:
         assert blocked is False
         assert "WARNING" not in reason
 
+    def test_terraform_keyword_in_commit_message(self):
+        """'terraform' and a blocked keyword appearing only inside a git commit
+        message must not trigger a block or prompt."""
+        cmd = 'git commit -m "docs: clarify terraform apply workflow and destroy risks"'
+        decision, _, blocked = check_command(cmd, CWD)
+        assert decision == "allow"
+        assert blocked is False
+
+    def test_terraform_keyword_in_chained_commit(self):
+        """'terraform' inside a commit message in a chained command must not match."""
+        cmd = 'git add . && git commit -m "remove stale terraform apply examples"'
+        decision, _, blocked = check_command(cmd, CWD)
+        assert decision == "allow"
+        assert blocked is False
+
 
 # ---------------------------------------------------------------------------
 # Case insensitivity

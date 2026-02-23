@@ -104,7 +104,7 @@ class TestBlockedCommands:
 
     def test_piped_command_with_blocked(self):
         """Blocked subcommand in a piped command is still caught."""
-        cmd = "echo values.yaml | xargs helm install myrelease"
+        cmd = "cat values.yaml | helm install myrelease -"
         decision, _, blocked = check_command(cmd, CWD)
         assert decision == "deny"
         assert blocked is True
@@ -245,6 +245,21 @@ class TestFalsePositiveResistance:
         """'helmsman' binary is not 'helm'."""
         decision, _, _ = check_command("helmsman install", CWD)
         assert decision == "allow"
+
+    def test_helm_keyword_in_commit_message(self):
+        """'helm' and a blocked keyword appearing only inside a git commit message
+        must not trigger a block or prompt."""
+        cmd = 'git commit -m "docs: fix helm test references and audit log paths"'
+        decision, _, blocked = check_command(cmd, CWD)
+        assert decision == "allow"
+        assert blocked is False
+
+    def test_helm_keyword_in_chained_commit(self):
+        """'helm' inside a commit message in a chained command must not match."""
+        cmd = 'git add . && git commit -m "update helm install docs and test-hooks.sh"'
+        decision, _, blocked = check_command(cmd, CWD)
+        assert decision == "allow"
+        assert blocked is False
 
 
 # ---------------------------------------------------------------------------

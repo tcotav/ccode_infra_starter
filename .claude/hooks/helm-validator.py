@@ -64,6 +64,39 @@ BLOCKED_COMMANDS = [
 # Pattern to identify any helm command
 HELM_PATTERN = HELM_COMMAND
 
+# Pattern to split a shell command into individual pipeline stages.
+# Handles: ; | && || and newlines
+_SHELL_OP_RE = re.compile(r"\s*(?:&&|\|\||[;|\n])\s*")
+
+# Pattern to strip leading VAR=value env-var assignments from a stage.
+_ENV_PREFIX_RE = re.compile(r"^(?:\w+=\S+\s+)+")
+
+
+def get_tool_stages(command, tool_pattern):
+    """Return pipeline stages where the tool binary is the executable.
+
+    Splits the command on shell operators and returns only stages where the
+    first token (after stripping any leading env var assignments) matches
+    tool_pattern. This prevents false positives when the tool name appears
+    as incidental text inside arguments such as commit messages or comments.
+
+    Args:
+        command: The full bash command string.
+        tool_pattern: Regex that identifies the tool binary (e.g. r'\\bhelm\\b').
+
+    Returns:
+        List of stage strings where the tool is the executable.
+    """
+    tool_stages = []
+    for stage in _SHELL_OP_RE.split(command):
+        stage = stage.strip()
+        if not stage:
+            continue
+        cleaned = _ENV_PREFIX_RE.sub("", stage).strip()
+        if re.match(tool_pattern, cleaned, re.IGNORECASE):
+            tool_stages.append(stage)
+    return tool_stages
+
 
 def is_in_devcontainer():
     """
@@ -147,24 +180,29 @@ def check_command(command, cwd):
             should_block: If True, command is completely blocked
     """
 
-    # Check if this is a helm command at all
-    if not re.search(HELM_PATTERN, command, re.IGNORECASE):
+    # Only validate commands where helm is actually the executable in at
+    # least one pipeline stage. This prevents false positives when 'helm'
+    # appears as text inside arguments (e.g. commit messages, file paths).
+    tool_stages = get_tool_stages(command, HELM_PATTERN)
+    if not tool_stages:
         return ("allow", "", False)
 
-    # Check blocked patterns first
-    for pattern, name in BLOCKED_COMMANDS:
-        if re.search(pattern, command, re.IGNORECASE):
-            reason = (
-                f"BLOCKED: {name} is not allowed.\n\n"
-                f"This command deploys to or mutates a cluster and must go through "
-                f"your GitOps workflow (ArgoCD, Flux, or PR-driven CI/CD).\n\n"
-                f"For local development, use:\n"
-                f"  helm template <chart>    # Render templates locally\n"
-                f"  helm lint <chart>        # Validate chart structure\n\n"
-                f"Working directory: {cwd}"
-            )
-            log_command(command, "BLOCKED", cwd, f"Blocked: {name}")
-            return ("deny", reason, True)
+    # Check blocked patterns against tool stages only (not the full command
+    # string) to avoid matching blocked keywords in unrelated text.
+    for stage in tool_stages:
+        for pattern, name in BLOCKED_COMMANDS:
+            if re.search(pattern, stage, re.IGNORECASE):
+                reason = (
+                    f"BLOCKED: {name} is not allowed.\n\n"
+                    f"This command deploys to or mutates a cluster and must go through "
+                    f"your GitOps workflow (ArgoCD, Flux, or PR-driven CI/CD).\n\n"
+                    f"For local development, use:\n"
+                    f"  helm template <chart>    # Render templates locally\n"
+                    f"  helm lint <chart>        # Validate chart structure\n\n"
+                    f"Working directory: {cwd}"
+                )
+                log_command(command, "BLOCKED", cwd, f"Blocked: {name}")
+                return ("deny", reason, True)
 
     # Check if the command contains blocked subcommand keywords despite not
     # matching the structured block patterns. This catches indirect execution
