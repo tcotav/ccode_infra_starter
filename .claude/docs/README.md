@@ -526,11 +526,11 @@ The hooks allow terraform commands, but terraform still needs valid credentials.
 The audit log is gitignored and stored locally. To clean up:
 
 ```bash
-# Archive old logs
-mv .claude/audit/terraform.log .claude/audit/terraform.log.$(date +%Y%m%d)
+# List all audit logs
+ls .claude/audit/
 
-# Or just delete
-rm .claude/audit/terraform.log
+# Delete logs older than 30 days
+find .claude/audit/ -name "*.log" -mtime +30 -delete
 ```
 
 ### "I keep seeing devcontainer warnings"
@@ -578,9 +578,12 @@ See .devcontainer/ directory for setup instructions.
 ### Viewing Logs Programmatically
 
 ```python
-# Parse audit log
+# Parse today's audit log
 import json
-with open('.claude/audit/terraform.log') as f:
+from datetime import date
+
+log_path = f".claude/audit/terraform-{date.today()}.log"
+with open(log_path) as f:
     for line in f:
         entry = json.loads(line)
         if entry['decision'] == 'BLOCKED':
