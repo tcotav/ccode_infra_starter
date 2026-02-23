@@ -48,7 +48,7 @@ You: "Can you run terraform apply?"
 
 **Verify in logs:**
 ```bash
-tail -1 .claude/audit/terraform.log | jq .
+tail -1 .claude/audit/terraform-$(date +%Y-%m-%d).log | jq .
 ```
 
 Should show:
@@ -92,7 +92,7 @@ You: "Can you run terraform validate?"
 
 **Verify in logs:**
 ```bash
-tail -2 .claude/audit/terraform.log | jq .
+tail -2 .claude/audit/terraform-$(date +%Y-%m-%d).log | jq .
 ```
 
 Should show two entries:
@@ -232,7 +232,7 @@ echo '{
 }' | python3 .claude/hooks/terraform-logger.py
 
 # Check the audit log
-tail -1 .claude/audit/terraform.log | jq .
+tail -1 .claude/audit/terraform-$(date +%Y-%m-%d).log | jq .
 ```
 
 ---

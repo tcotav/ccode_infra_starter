@@ -32,8 +32,7 @@ cp /tmp/tf-hooks/.gitignore .gitignore  # Or merge if you have one
 
 ```bash
 # Run automated tests
-chmod +x .claude/hooks/*.py
-./.claude/docs/test-hooks.sh
+pytest .claude/hooks/ -v
 ```
 
 ### 3. Customize Your AGENTS.md file (Optional - [see next section](#customize-starter-repo-with-claude-code))
@@ -149,7 +148,7 @@ The hooks use Claude Code's native hook system:
 2. **Post-execution logging** (`.claude/hooks/terraform-logger.py`)
    - Records command results to audit trail
    - Captures timestamps, exit codes, success/failure
-   - Logs stored in `.claude/audit/terraform.log` (gitignored)
+   - Logs stored in `.claude/audit/terraform-YYYY-MM-DD.log` (gitignored, rotated daily)
 
 3. **Hook configuration** (`.claude/settings.json`)
    - Defines which hooks run and when
