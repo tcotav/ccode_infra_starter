@@ -1,7 +1,6 @@
 """Tests for terraform-validator.py check_command() logic."""
 
 import importlib.util
-import os
 from pathlib import Path
 from unittest.mock import patch
 
@@ -27,17 +26,7 @@ def _no_audit_log():
         yield
 
 
-@pytest.fixture(autouse=True)
-def _suppress_container_warning():
-    """Set IN_DEVCONTAINER so container warnings don't interfere with assertions."""
-    old = os.environ.get("IN_DEVCONTAINER")
-    os.environ["IN_DEVCONTAINER"] = "true"
-    yield
-    if old is None:
-        del os.environ["IN_DEVCONTAINER"]
-    else:
-        os.environ["IN_DEVCONTAINER"] = old
-
+# _suppress_container_warning fixture is provided by conftest.py
 
 # ---------------------------------------------------------------------------
 # Blocked commands  (decision="deny", should_block=True)
@@ -253,6 +242,21 @@ class TestFalsePositiveResistance:
         assert decision == "ask"
         assert blocked is False
         assert "WARNING" not in reason
+
+    def test_terraform_keyword_in_commit_message(self):
+        """'terraform' and a blocked keyword appearing only inside a git commit
+        message must not trigger a block or prompt."""
+        cmd = 'git commit -m "docs: clarify terraform apply workflow and destroy risks"'
+        decision, _, blocked = check_command(cmd, CWD)
+        assert decision == "allow"
+        assert blocked is False
+
+    def test_terraform_keyword_in_chained_commit(self):
+        """'terraform' inside a commit message in a chained command must not match."""
+        cmd = 'git add . && git commit -m "remove stale terraform apply examples"'
+        decision, _, blocked = check_command(cmd, CWD)
+        assert decision == "allow"
+        assert blocked is False
 
 
 # ---------------------------------------------------------------------------
