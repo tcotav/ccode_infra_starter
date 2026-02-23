@@ -7,8 +7,7 @@ Post-execution hook that logs terraform command results after they complete.
 Behavior:
 - Logs command completion status (success/failure)
 - Records exit codes
-- Captures execution time
-- Appends to .claude/audit/terraform.log
+- Appends to .claude/audit/terraform-YYYY-MM-DD.log
 
 Usage:
   This script is automatically invoked by Claude Code hooks.
@@ -19,60 +18,18 @@ Author: SRE Platform Team
 
 import json
 import sys
-import os
 import re
-from datetime import datetime
+import os
 from pathlib import Path
 
+# Allow import from the same directory when invoked as a standalone script.
+sys.path.insert(0, str(Path(__file__).parent))
+from hook_utils import get_dated_audit_log_path, log_result
 
-# Audit log location (project-specific, rotated daily)
-def get_audit_log_path():
-    """Get dated audit log path for automatic daily rotation."""
-    date_str = datetime.now().strftime("%Y-%m-%d")
-    audit_dir = Path(os.environ.get("CLAUDE_PROJECT_DIR", ".")) / ".claude" / "audit"
-    return audit_dir / f"terraform-{date_str}.log"
-
-
-AUDIT_LOG = get_audit_log_path()
+AUDIT_LOG = get_dated_audit_log_path("terraform")
 
 # Common terraform aliases (matches: terraform, tf, tform)
 TERRAFORM_PATTERN = r"\b(terraform|tf|tform)\b"
-
-
-def ensure_audit_log_exists():
-    """Create audit log directory if it doesn't exist."""
-    AUDIT_LOG.parent.mkdir(parents=True, exist_ok=True)
-
-
-def log_result(command, cwd, success, exit_code):
-    """
-    Log terraform command result to audit file.
-
-    Args:
-        command: The terraform command that was executed
-        cwd: Current working directory
-        success: Whether command succeeded (boolean)
-        exit_code: Command exit code
-    """
-    ensure_audit_log_exists()
-
-    timestamp = datetime.now().isoformat()
-    status = "COMPLETED_SUCCESS" if success else "COMPLETED_FAILURE"
-
-    log_entry = {
-        "timestamp": timestamp,
-        "command": command,
-        "decision": status,
-        "working_dir": cwd,
-        "exit_code": exit_code,
-        "success": success,
-    }
-
-    try:
-        with open(AUDIT_LOG, "a") as f:
-            f.write(json.dumps(log_entry) + "\n")
-    except Exception as e:
-        print(f"Warning: Could not write to audit log: {e}", file=sys.stderr)
 
 
 def main():
@@ -83,28 +40,23 @@ def main():
         print(f"Error: Invalid JSON input from Claude Code: {e}", file=sys.stderr)
         sys.exit(0)  # Don't fail the workflow on logging errors
 
-    # Extract information from hook input
     tool_name = input_data.get("tool_name", "")
     tool_input = input_data.get("tool_input", {})
     tool_response = input_data.get("tool_response", {})
     cwd = input_data.get("cwd", os.getcwd())
-
     command = tool_input.get("command", "")
 
     # Only log terraform commands executed via Bash tool
     if tool_name != "Bash" or not re.search(TERRAFORM_PATTERN, command, re.IGNORECASE):
         sys.exit(0)
 
-    # Extract execution results
     success = tool_response.get("success", False)
     exit_code = tool_response.get("exit_code", "unknown")
 
-    # Log the result
     # Note: PostToolUse only fires after execution. If a PreToolUse hook blocked
     # the command, this hook never runs -- so every logged command was approved.
-    log_result(command, cwd, success, exit_code)
+    log_result(AUDIT_LOG, command, cwd, success, exit_code)
 
-    # Always succeed - don't block workflow on logging failures
     sys.exit(0)
 
 

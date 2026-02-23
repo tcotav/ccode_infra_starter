@@ -1,7 +1,6 @@
 """Tests for helm-validator.py check_command() logic."""
 
 import importlib.util
-import os
 from pathlib import Path
 from unittest.mock import patch
 
@@ -27,17 +26,7 @@ def _no_audit_log():
         yield
 
 
-@pytest.fixture(autouse=True)
-def _suppress_container_warning():
-    """Set IN_DEVCONTAINER so container warnings don't interfere with assertions."""
-    old = os.environ.get("IN_DEVCONTAINER")
-    os.environ["IN_DEVCONTAINER"] = "true"
-    yield
-    if old is None:
-        del os.environ["IN_DEVCONTAINER"]
-    else:
-        os.environ["IN_DEVCONTAINER"] = old
-
+# _suppress_container_warning fixture is provided by conftest.py
 
 # ---------------------------------------------------------------------------
 # Blocked commands  (decision="deny", should_block=True)

@@ -8,7 +8,7 @@ Behavior:
 - BLOCKS: terraform apply, destroy, import, and state manipulation commands
 - PROMPTS: All other terraform commands (plan, init, fmt, validate, etc.)
 - WARNS: If not running in devcontainer (encourages consistent environment)
-- LOGS: All terraform command attempts to .claude/audit/terraform.log
+- LOGS: All terraform command attempts to .claude/audit/terraform-YYYY-MM-DD.log
 
 Usage:
   This script is automatically invoked by Claude Code hooks.
@@ -21,19 +21,18 @@ import json
 import sys
 import re
 import os
-from datetime import datetime
 from pathlib import Path
 
+# Allow import from the same directory when invoked as a standalone script.
+sys.path.insert(0, str(Path(__file__).parent))
+from hook_utils import (
+    get_dated_audit_log_path,
+    get_container_warning,
+    get_tool_stages,
+    log_command,
+)
 
-# Audit log location (project-specific, rotated daily)
-def get_audit_log_path():
-    """Get dated audit log path for automatic daily rotation."""
-    date_str = datetime.now().strftime("%Y-%m-%d")
-    audit_dir = Path(os.environ.get("CLAUDE_PROJECT_DIR", ".")) / ".claude" / "audit"
-    return audit_dir / f"terraform-{date_str}.log"
-
-
-AUDIT_LOG = get_audit_log_path()
+AUDIT_LOG = get_dated_audit_log_path("terraform")
 
 # Terraform command names to catch
 #
@@ -69,106 +68,6 @@ BLOCKED_COMMANDS = [
 # All other terraform commands require user approval
 TERRAFORM_PATTERN = TF_COMMAND
 
-# Pattern to split a shell command into individual pipeline stages.
-# Handles: ; | && || and newlines
-_SHELL_OP_RE = re.compile(r"\s*(?:&&|\|\||[;|\n])\s*")
-
-# Pattern to strip leading VAR=value env-var assignments from a stage.
-_ENV_PREFIX_RE = re.compile(r"^(?:\w+=\S+\s+)+")
-
-
-def get_tool_stages(command, tool_pattern):
-    """Return pipeline stages where the tool binary is the executable.
-
-    Splits the command on shell operators and returns only stages where the
-    first token (after stripping any leading env var assignments) matches
-    tool_pattern. This prevents false positives when the tool name appears
-    as incidental text inside arguments such as commit messages or comments.
-
-    Args:
-        command: The full bash command string.
-        tool_pattern: Regex that identifies the tool binary (e.g. r'\\btf\\b').
-
-    Returns:
-        List of stage strings where the tool is the executable.
-    """
-    tool_stages = []
-    for stage in _SHELL_OP_RE.split(command):
-        stage = stage.strip()
-        if not stage:
-            continue
-        cleaned = _ENV_PREFIX_RE.sub("", stage).strip()
-        if re.match(tool_pattern, cleaned, re.IGNORECASE):
-            tool_stages.append(stage)
-    return tool_stages
-
-
-def is_in_devcontainer():
-    """
-    Check if running inside the devcontainer.
-
-    Returns:
-        bool: True if IN_DEVCONTAINER environment variable is set to 'true'
-    """
-    return os.environ.get("IN_DEVCONTAINER", "").lower() == "true"
-
-
-def get_container_warning():
-    """
-    Generate warning message if not running in devcontainer.
-
-    Returns:
-        str: Warning message if not in container, empty string otherwise
-    """
-    if is_in_devcontainer():
-        return ""
-
-    return (
-        "\n\n"
-        "========================================\n"
-        "WARNING: Not running in devcontainer\n"
-        "========================================\n"
-        "The devcontainer provides:\n"
-        "  - Consistent terraform versions\n"
-        "  - Pre-configured tooling and linters\n"
-        "  - Standardized development environment\n\n"
-        "Consider using the devcontainer for terraform operations.\n"
-        "See .devcontainer/ directory for setup instructions."
-    )
-
-
-def ensure_audit_log_exists():
-    """Create audit log directory if it doesn't exist."""
-    AUDIT_LOG.parent.mkdir(parents=True, exist_ok=True)
-
-
-def log_command(command, decision, cwd, reason=""):
-    """
-    Log terraform command attempt to audit file with timestamp.
-
-    Args:
-        command: The terraform command that was attempted
-        decision: BLOCKED, PENDING_APPROVAL, APPROVED, or DENIED
-        cwd: Current working directory
-        reason: Human-readable reason for the decision
-    """
-    ensure_audit_log_exists()
-
-    timestamp = datetime.now().isoformat()
-    log_entry = {
-        "timestamp": timestamp,
-        "command": command,
-        "decision": decision,
-        "working_dir": cwd,
-        "reason": reason,
-    }
-
-    try:
-        with open(AUDIT_LOG, "a") as f:
-            f.write(json.dumps(log_entry) + "\n")
-    except Exception as e:
-        print(f"Warning: Could not write to audit log: {e}", file=sys.stderr)
-
 
 def check_command(command, cwd):
     """
@@ -203,7 +102,7 @@ def check_command(command, cwd):
                     f"your standard PR review workflow.\n\n"
                     f"Working directory: {cwd}"
                 )
-                log_command(command, "BLOCKED", cwd, f"Blocked: {name}")
+                log_command(AUDIT_LOG, command, "BLOCKED", cwd, f"Blocked: {name}")
                 return ("deny", reason, True)
 
     # Check if the command contains blocked subcommand keywords despite not
@@ -215,8 +114,7 @@ def check_command(command, cwd):
         if re.search(rf"\b{kw}\b", command, re.IGNORECASE)
     ]
 
-    # Get container warning (empty string if in container)
-    container_warning = get_container_warning()
+    container_warning = get_container_warning("terraform")
 
     if suspicious:
         keywords = ", ".join(suspicious)
@@ -230,6 +128,7 @@ def check_command(command, cwd):
             f"{container_warning}"
         )
         log_command(
+            AUDIT_LOG,
             command,
             "PENDING_APPROVAL_SUSPICIOUS",
             cwd,
@@ -243,7 +142,9 @@ def check_command(command, cwd):
             f"This prompt ensures you review each terraform operation before execution."
             f"{container_warning}"
         )
-        log_command(command, "PENDING_APPROVAL", cwd, "Awaiting user approval")
+        log_command(
+            AUDIT_LOG, command, "PENDING_APPROVAL", cwd, "Awaiting user approval"
+        )
 
     return ("ask", reason, False)
 
@@ -256,20 +157,16 @@ def main():
         print(f"Error: Invalid JSON input from Claude Code: {e}", file=sys.stderr)
         sys.exit(1)
 
-    # Extract relevant information from hook input
     tool_name = input_data.get("tool_name", "")
     tool_input = input_data.get("tool_input", {})
     command = tool_input.get("command", "")
     cwd = input_data.get("cwd", os.getcwd())
 
-    # Only validate Bash tool calls
     if tool_name != "Bash":
         sys.exit(0)
 
-    # Check the command
     decision, reason, should_block = check_command(command, cwd)
 
-    # Build response for Claude Code
     response = {
         "hookSpecificOutput": {
             "hookEventName": "PreToolUse",
