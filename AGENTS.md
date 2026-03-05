@@ -93,6 +93,7 @@ AGENTS.local.md                # Personal preferences (gitignored, optional)
 - **Don't make the hooks less strict** without discussing tradeoffs
 - **Don't create new files unnecessarily** - prefer editing existing docs
 - **Don't suggest dynamic alias detection** - we already decided against it
+- **Always check project structure before running tests or bash commands** - identify whether this is a monorepo with subdirectories and run commands from the correct subdirectory, not the repo root
 
 ## Terraform Workflow
 

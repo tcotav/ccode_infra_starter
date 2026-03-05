@@ -32,6 +32,15 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if echo $CLAUDE_FILE | grep -q '.tf$'; then terraform fmt $CLAUDE_FILE; fi"
+          }
+        ]
       }
     ]
   }
