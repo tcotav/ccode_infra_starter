@@ -40,7 +40,7 @@ Before deploying to the team, verify everything works:
 
 ```bash
 # Run automated tests
-./.claude/docs/test-hooks.sh
+pytest .claude/hooks/
 
 # Or manually test (see TESTING.md)
 cat .claude/docs/TESTING.md
@@ -226,7 +226,7 @@ Enables safe use of Claude Code for terraform work while maintaining our change 
 
 Verified locally with automated test suite:
 ```bash
-./.claude/docs/test-hooks.sh
+pytest .claude/hooks/
 ```
 
 All tests passing
@@ -393,7 +393,7 @@ fi
 
 echo "Next steps:"
 echo "1. Review .claude/docs/README.md"
-echo "2. Test with: ./.claude/docs/test-hooks.sh"
+echo "2. Test with: pytest .claude/hooks/"
 echo "3. Commit and PR"
 ```
 
