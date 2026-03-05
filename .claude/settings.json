@@ -38,7 +38,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "if echo $CLAUDE_FILE | grep -q '.tf$'; then terraform fmt $CLAUDE_FILE; fi"
+            "command": "python3 -c \"import sys,json,os; d=json.load(sys.stdin); f=d.get('tool_input',{}).get('file_path',''); os.system(f'terraform fmt {f}') if f.endswith('.tf') else None\""
           }
         ]
       }
