@@ -34,7 +34,8 @@ You review and approve each action, you are responsible for the work product, yo
 ├── skills/
 │   ├── tf-plan/               # /tf-plan skill for terraform validation
 │   ├── helm-check/            # /helm-check skill for Helm validation
-│   └── review/                # /review skill for code review
+│   ├── git-ship/              # /git-ship skill for branch, stage, commit, and PR workflow
+│   └── review/                # /review skill for code review (self-configuring placeholder — run once to initialize)
 ├── docs/
 │   ├── README.md              # Main usage guide for SRE teams
 │   ├── TESTING.md             # Testing procedures
@@ -96,6 +97,17 @@ AGENTS.local.md                # Personal preferences (gitignored, optional)
 - **Always check project structure before running tests or bash commands** - identify whether this is a monorepo with subdirectories and run commands from the correct subdirectory, not the repo root
 
 ## Terraform Workflow
+
+### Available Skills
+
+The following Claude Code skills are installed in `.claude/skills/`. Use them when the situation calls for it:
+
+- `/tf-plan` — validate terraform changes locally (fmt → init → plan); never applies
+- `/helm-check` — lint and render Helm charts locally; never installs or upgrades
+- `/git-ship` — end-to-end git workflow: branch check, stage, commit, and optional PR creation
+- `/review` — critically review a PR or diff; self-configuring on first use (will ask to initialize for this repo)
+
+---
 
 ### Using the /tf-plan Skill (Recommended)
 
