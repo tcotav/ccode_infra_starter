@@ -345,6 +345,11 @@ See [.devcontainer/README.md](.devcontainer/README.md) for:
 ├── hooks/
 │   ├── terraform-validator.py # Pre-execution validation
 │   └── terraform-logger.py    # Post-execution logging
+├── skills/
+│   ├── tf-plan/               # /tf-plan skill
+│   ├── helm-check/            # /helm-check skill
+│   ├── git-ship/              # /git-ship skill
+│   └── review/                # /review skill (self-configuring)
 ├── docs/
 │   ├── README.md              # Main usage guide
 │   ├── TESTING.md             # Testing procedures
@@ -470,10 +475,8 @@ You: y
 [Plan output shows the new Cloud SQL instance]
 
 # 3. Commit and create PR
-You: [Handle git operations yourself]
-git add .
-git commit -m "Add staging Cloud SQL instance"
-git push origin feature/staging-cloudsql
+You: "/git-ship"
+[git-ship checks branch, stages files, drafts commit message, offers to open PR]
 
 # 4. Apply via your standard process
 # (After PR approval, Atlantis/CI applies the changes)
