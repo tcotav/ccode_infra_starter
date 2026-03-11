@@ -7,7 +7,6 @@ Pre-execution hook that validates terraform commands before Claude runs them.
 Behavior:
 - BLOCKS: terraform apply, destroy, import, and state manipulation commands
 - PROMPTS: All other terraform commands (plan, init, fmt, validate, etc.)
-- WARNS: If not running in devcontainer (encourages consistent environment)
 - LOGS: All terraform command attempts to .claude/audit/terraform-YYYY-MM-DD.log
 
 Usage:
@@ -27,7 +26,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 from hook_utils import (
     get_dated_audit_log_path,
-    get_container_warning,
     get_tool_stages,
     log_command,
 )
@@ -42,9 +40,9 @@ AUDIT_LOG = get_dated_audit_log_path("terraform")
 # - Wrapper SCRIPTS in $PATH (e.g., ~/bin/tf)
 # - Common shorthand commands your team uses
 #
-# Default list covers: terraform, tf, tform
+# Default list covers: terraform, tf, tform, tofu (OpenTofu)
 # Add your custom wrapper scripts here if needed (e.g., tfm, tfwrapper, etc.)
-TF_COMMAND = r"\b(terraform|tf|tform)\b"
+TF_COMMAND = r"\b(terraform|tf|tform|tofu)\b"
 
 # Terraform global flags use = syntax for values (e.g., -chdir=DIR),
 # so any -prefixed token is self-contained (no space-separated values to skip).
@@ -114,8 +112,6 @@ def check_command(command, cwd):
         if re.search(rf"\b{kw}\b", command, re.IGNORECASE)
     ]
 
-    container_warning = get_container_warning("terraform")
-
     if suspicious:
         keywords = ", ".join(suspicious)
         reason = (
@@ -125,7 +121,6 @@ def check_command(command, cwd):
             f"  Working directory: {cwd}\n\n"
             f"This may be using variables, eval, or other indirection to run a\n"
             f"blocked operation. Review the full command carefully before approving."
-            f"{container_warning}"
         )
         log_command(
             AUDIT_LOG,
@@ -140,7 +135,6 @@ def check_command(command, cwd):
             f"  Command: {command}\n"
             f"  Working directory: {cwd}\n\n"
             f"This prompt ensures you review each terraform operation before execution."
-            f"{container_warning}"
         )
         log_command(
             AUDIT_LOG, command, "PENDING_APPROVAL", cwd, "Awaiting user approval"

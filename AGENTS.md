@@ -72,7 +72,7 @@ AGENTS.local.md                # Personal preferences (gitignored, optional)
 ### Alias Handling
 
 - Hardcoded list of common command names per tool:
-  - Terraform: `terraform`, `tf`, `tform`
+  - Terraform: `terraform`, `tf`, `tform`, `tofu`
   - Helm: `helm`
 - Shell aliases don't work in subprocess calls, so they can't bypass hooks anyway
 - The list catches wrapper **scripts** in PATH, not shell aliases
