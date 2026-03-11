@@ -10,7 +10,6 @@ Scoped to Helm chart development workflows. Encourages local validation
 Behavior:
 - BLOCKS: helm install, upgrade, uninstall, rollback, test (cluster mutations)
 - PROMPTS: helm template, lint, show, dependency, package, etc. (local dev)
-- WARNS: If not running in devcontainer (encourages consistent environment)
 - LOGS: All helm command attempts to .claude/audit/helm-YYYY-MM-DD.log
 
 Usage:
@@ -30,7 +29,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 from hook_utils import (
     get_dated_audit_log_path,
-    get_container_warning,
     get_tool_stages,
     log_command,
 )
@@ -112,8 +110,6 @@ def check_command(command, cwd):
         if re.search(rf"\b{kw}\b", command, re.IGNORECASE)
     ]
 
-    container_warning = get_container_warning("helm")
-
     if suspicious:
         keywords = ", ".join(suspicious)
         reason = (
@@ -123,7 +119,6 @@ def check_command(command, cwd):
             f"  Working directory: {cwd}\n\n"
             f"This may be using variables, eval, or other indirection to run a\n"
             f"blocked operation. Review the full command carefully before approving."
-            f"{container_warning}"
         )
         log_command(
             AUDIT_LOG,
@@ -138,7 +133,6 @@ def check_command(command, cwd):
             f"  Command: {command}\n"
             f"  Working directory: {cwd}\n\n"
             f"This prompt ensures you review each helm operation before execution."
-            f"{container_warning}"
         )
         log_command(
             AUDIT_LOG, command, "PENDING_APPROVAL", cwd, "Awaiting user approval"
